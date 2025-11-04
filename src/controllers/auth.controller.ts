@@ -4,12 +4,18 @@ import { StatusCodes } from "http-status-codes";
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 
-export const learnerRegister = async (
-  req: Request,
-  res: Response
-): Promise<void> => {
+export const userRegister = async (req: Request, res: Response) => {
   try {
     const { name, email, password } = req.body;
+
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    
+    if (!emailRegex.test(email)) {
+      return res.status(StatusCodes.BAD_REQUEST).json({
+        success: false,
+        message: "Please enter a valid email address.",
+      });
+    }
 
     if (!name || !email || !password) {
       res.status(StatusCodes.BAD_REQUEST).json({
@@ -22,7 +28,7 @@ export const learnerRegister = async (
     const findUser = await User.findOne({ email });
 
     if (findUser) {
-      res.status(StatusCodes.BAD_REQUEST).json({
+      return res.status(StatusCodes.BAD_REQUEST).json({
         success: false,
         message: "Email already exists. Please log in instead.",
       });
@@ -37,16 +43,69 @@ export const learnerRegister = async (
       password: hashPass,
       role: "learner",
     });
-    
+
     res.status(StatusCodes.CREATED).json({
       success: true,
       message: "Successfully Created",
       data: register,
     });
-  } catch (error: any) {
-    res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({
-      success: false,
-      message: error.message,
+  } catch (error: unknown) {
+    if (error instanceof Error) {
+      res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({
+        success: false,
+        message: error.message,
+      });
+    } else {
+      res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({
+        success: false,
+        message: "An unexpected error occurred",
+      });
+    }
+  }
+};
+
+export const userLogin = async (req: Request, res: Response) => {
+  try {
+    const { email, password } = req.body;
+
+    const user = await User.findOne({ email });
+    if (!user) {
+      return res.status(StatusCodes.NOT_FOUND).json({
+        success: false,
+        message: "User not found. Please login.",
+      });
+    }
+
+    const isMatching = await bcrypt.compare(password, user.password);
+    if (!isMatching) {
+      return res.status(StatusCodes.UNAUTHORIZED).json({
+        success: false,
+        message: "Invalid credentials. Please try again.",
+      });
+    }
+
+    const token = jwt.sign(
+      { id: user._id, role: user.role },
+      process.env.JWT_SECRET as string,
+      { expiresIn: "12h" }
+    );
+
+    res.status(StatusCodes.OK).json({
+      success: true,
+      message: "Successfully Logged In.",
+      token,
     });
+  } catch (error: unknown) {
+    if (error instanceof Error) {
+      res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({
+        success: false,
+        message: error.message,
+      });
+    } else {
+      res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({
+        success: false,
+        message: "An unexpected error occurred",
+      });
+    }
   }
 };
