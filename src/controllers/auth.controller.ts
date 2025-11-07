@@ -9,7 +9,7 @@ export const userRegister = async (req: Request, res: Response) => {
     const { name, email, password } = req.body;
 
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    
+
     if (!emailRegex.test(email)) {
       return res.status(StatusCodes.BAD_REQUEST).json({
         success: false,
@@ -68,6 +68,15 @@ export const userLogin = async (req: Request, res: Response) => {
   try {
     const { email, password } = req.body;
 
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    
+    if (!emailRegex.test(email)) {
+      return res.status(StatusCodes.BAD_REQUEST).json({
+        success: false,
+        message: "Please enter a valid email address.",
+      });
+    }
+    
     const user = await User.findOne({ email });
     if (!user) {
       return res.status(StatusCodes.NOT_FOUND).json({
