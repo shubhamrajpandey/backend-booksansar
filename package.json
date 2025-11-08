@@ -2,25 +2,12 @@
   "name": "backend-booksansar",
   "version": "1.0.0",
   "main": "dist/server.js",
-  "type": "module",
   "scripts": {
     "start": "node dist/server.js",
     "build": "tsc",
     "dev": "ts-node-dev --respawn --transpile-only src/server.ts",
-    "lint": "eslint . --ext .ts",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
-  "keywords": [
-    "booksansar",
-    "nodejs",
-    "express",
-    "typescript",
-    "mern",
-    "fyp"
-  ],
-  "author": "Shubham Raj Pandey",
-  "license": "ISC",
-  "description": "Backend for BookSansar FYP — MERN-based book marketplace and learning platform",
   "dependencies": {
     "bcrypt": "^6.0.0",
     "cors": "^2.8.5",
