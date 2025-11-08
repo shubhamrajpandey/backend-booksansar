@@ -1,7 +1,7 @@
-import mongoose, { Schema, Document, Model } from "mongoose";
+import mongoose, { Schema, Document, Model, Types } from "mongoose";
 
 export interface IOTP extends Document {
-  email: string;
+  user: Types.ObjectId;
   otp: string;
   expiresAt: Date;
   used: boolean;
@@ -9,7 +9,7 @@ export interface IOTP extends Document {
 }
 
 const OTPSchema: Schema<IOTP> = new Schema({
-  email: { type: String, required: true },
+  user: {type: mongoose.Schema.Types.ObjectId, ref:"User", required: true},
   otp: { type: String, required: true },
   expiresAt: { type: Date, required: true },
   used: { type: Boolean, default: false },
