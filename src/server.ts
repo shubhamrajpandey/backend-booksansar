@@ -1,8 +1,8 @@
 import express from "express";
 import dotenv from "dotenv";
-import connectDb from "./src/config/db";
-import  authRoute from "./src/routes/auth.routes";
-import otpRoute from "./src/routes/otp.routes";
+import connectDb from "./config/db";
+import authRoute from "./routes/auth.routes";
+import otpRoute from "./routes/otp.routes";
 const app = express();
 
 dotenv.config();
