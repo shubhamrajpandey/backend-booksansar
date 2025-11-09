@@ -3,12 +3,11 @@
   "version": "1.0.0",
   "main": "dist/server.js",
   "scripts": {
-  "start": "node dist/server.js",
-  "build": "tsc",
-  "dev": "ts-node-dev --respawn --transpile-only src/server.ts",
-  "postinstall": "npm install --omit=dev=false"
-}
-,
+    "start": "node dist/server.js",
+    "build": "tsc",
+    "dev": "ts-node-dev --respawn --transpile-only src/server.ts",
+    "postinstall": "npm install --omit=dev=false"
+  },
   "dependencies": {
     "bcrypt": "^6.0.0",
     "cors": "^2.8.5",
