@@ -40,24 +40,44 @@ export const sendOtp = async (req: Request, res: Response) => {
       "BookSansar - OTP Verification",
       `Your OTP is: ${otpGenerate}`,
       `
-        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: auto; border:1px solid #e0e0e0; border-radius:10px; overflow:hidden;">
-          <div style="background-color:#28a745; color:white; text-align:center; padding:20px;">
-            <h1>BookSansar</h1>
-          </div>
-          <div style="padding:30px; text-align:center;">
-            <h2>Email Verification</h2>
-            <p>Your One-Time Password (OTP) is:</p>
-            <div style="display:inline-block; border:2px dashed #28a745; border-radius:10px; padding:15px 30px; margin:20px 0;">
-              <span style="font-size:32px; font-weight:bold; color:#28a745;">${otpGenerate}</span>
-            </div>
-            <p>This OTP is valid for <strong>10 minutes</strong>. Do not share it with anyone.</p>
-          </div>
-          <div style="background-color:#f5f5f5; text-align:center; padding:15px; font-size:12px; color:#888;">
-            &copy; 2025 BookSansar
-          </div>
+      <div style="font-family: 'Inter', Arial, sans-serif; max-width: 600px; margin: auto; border:1px solid #e5e7eb; border-radius:12px; overflow:hidden; box-shadow:0 4px 12px rgba(0,0,0,0.08);">
+        
+        <!-- Header -->
+        <div style="background-color:#321874; color:#ffffff; text-align:center; padding:24px 0;">
+          <h1 style="margin:0; font-size:28px; font-family:'Sedgwick Ave', cursive; letter-spacing:1px;">
+            <span style="color:#ffffff;">Book</span><span style="color:#E68A00;">Sansar</span>
+          </h1>
+          <p style="margin:6px 0 0; font-size:14px; color:#e0e0e0;">Your digital reading companion</p>
         </div>
+    
+        <!-- Body -->
+        <div style="padding:32px 24px; text-align:center; color:#1f2937;">
+          <h2 style="margin-bottom:12px; color:#321874;">Email Verification</h2>
+          <p style="margin:0 0 24px; font-size:15px; line-height:1.6; color:#4b5563;">
+            Please use the following One-Time Password (OTP) to verify your email:
+          </p>
+    
+          <!-- OTP Box -->
+          <div style="display:inline-block; background:#fdfaf6; border:2px solid #E68A00; border-radius:10px; padding:16px 40px; margin:20px 0;">
+            <span style="font-size:36px; font-weight:700; color:#E68A00; letter-spacing:4px;">${otpGenerate}</span>
+          </div>
+    
+          <p style="margin:16px 0 0; font-size:14px; color:#6b7280;">
+            This OTP is valid for <strong style="color:#E68A00;">10 minutes</strong>. Please do not share it with anyone.
+          </p>
+        </div>
+    
+        <!-- Footer -->
+        <div style="background-color:#f9fafb; text-align:center; padding:16px; font-size:13px; color:#9ca3af;">
+          &copy; 2025 <span style="color:#321874; font-weight:600;">BookSansar</span>. All rights reserved.
+        </div>
+      </div>
+    
+      <!-- Google Font -->
+      <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Sedgwick+Ave&display=swap" rel="stylesheet">
       `
     );
+    
 
     console.log(`OTP sent to ${email}: ${otpGenerate}`);
 
