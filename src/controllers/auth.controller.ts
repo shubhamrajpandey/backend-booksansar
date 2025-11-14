@@ -99,10 +99,19 @@ export const userLogin = async (req: Request, res: Response) => {
       { expiresIn: "12h" }
     );
 
+    const safeUser = {
+      id: user._id,
+      name:user.name,
+      email:user.email,
+      role:user.role
+    }
+
     res.status(StatusCodes.OK).json({
       success: true,
       message: "Successfully Logged In.",
       token,
+      user:safeUser
+
     });
   } catch (error: unknown) {
     if (error instanceof Error) {
