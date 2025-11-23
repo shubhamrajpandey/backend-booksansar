@@ -28,8 +28,7 @@ const sendEmail = async (
     const response = await sgMail.send(msg);
     console.log("Email sent successfully to:", to);
     return response;
-  } catch (error: any) {
-    console.error("Failed to send email:", error.response?.body || error);
+  } catch (error: unknown) {
     throw new Error("Email sending failed");
   }
 };
