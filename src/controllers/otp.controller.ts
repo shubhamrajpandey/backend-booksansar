@@ -164,7 +164,7 @@ export const verifyReset = async (req: Request, res: Response) => {
 
     res.status(StatusCodes.OK).json({
       success: true,
-      message: "Password reset successfully. You can now log in.",
+      message: "Password reset successfully.",
     });
   } catch (error) {
     console.error("Error verifying OTP / resetting password:", error);
