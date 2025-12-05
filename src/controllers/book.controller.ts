@@ -2,7 +2,6 @@ import { StatusCodes } from "http-status-codes";
 import { Response, Request } from "express";
 import Book from "../models/book.model";
 
-
 export const uploadBookDetails = async (req: Request, res: Response) => {
   try {
     const {
@@ -11,8 +10,8 @@ export const uploadBookDetails = async (req: Request, res: Response) => {
       author,
       category,
       description,
-      coverImage,   
-      pdfUrl,    
+      coverImage,
+      pdfUrl,
       price,
       stock,
       condition,
@@ -20,13 +19,11 @@ export const uploadBookDetails = async (req: Request, res: Response) => {
     } = req.body;
 
     const uploader = req.user?.id;
+    const role = req.user?.role;
 
     if (!uploader) {
-      return res.status(StatusCodes.UNAUTHORIZED).json({
-        message: "Unauthorized",
-      });
+      return res.status(StatusCodes.UNAUTHORIZED).json({ message: "Unauthorized" });
     }
-
 
     if (!type || !title || !author || !category) {
       return res.status(StatusCodes.BAD_REQUEST).json({
@@ -34,6 +31,17 @@ export const uploadBookDetails = async (req: Request, res: Response) => {
       });
     }
 
+    if (type === "physical" && role !== "vendor") {
+      return res.status(StatusCodes.FORBIDDEN).json({
+        message: "Only vendors can upload physical books",
+      });
+    }
+
+    if (type === "second-hand" && role !== "learner") {
+      return res.status(StatusCodes.FORBIDDEN).json({
+        message: "Only learners can upload second-hand books",
+      });
+    }
 
     if (type === "free") {
       if (!pdfUrl) {
@@ -44,9 +52,9 @@ export const uploadBookDetails = async (req: Request, res: Response) => {
     }
 
     if (type === "physical") {
-      if (!price || !stock) {
+      if (!price || !stock || !deliveryInfo) {
         return res.status(StatusCodes.BAD_REQUEST).json({
-          message: "Physical books require price and stock",
+          message: "Physical books require price, stock, and delivery info",
         });
       }
     }
@@ -59,7 +67,6 @@ export const uploadBookDetails = async (req: Request, res: Response) => {
       }
     }
 
- 
     const book = await Book.create({
       type,
       title,
@@ -72,7 +79,7 @@ export const uploadBookDetails = async (req: Request, res: Response) => {
       stock,
       condition,
       deliveryInfo,
-      visibility: "pending",
+      visibility: "pending", 
       uploader,
     });
 
@@ -89,8 +96,7 @@ export const uploadBookDetails = async (req: Request, res: Response) => {
   }
 };
 
-
-export const getBookDetails = async (req: Request, res: Response) => {
+export const getAllBooks = async (req: Request, res: Response) => {
   try {
     const book = await Book.find().populate("uploader", "name,email,role");
 
@@ -105,5 +111,41 @@ export const getBookDetails = async (req: Request, res: Response) => {
       message: "Server error",
       error,
     });
+  }
+};
+
+export const getSingleBook = async (req: Request, res: Response) => {
+  try {
+    const book = await Book.findById(req.params.id).populate(
+      "uploader",
+      "name,email,role"
+    );
+
+    return res.status(StatusCodes.OK).json({
+      success: true,
+      message: "Books retrieved successfully",
+      book,
+    });
+  } catch (error) {
+    return res
+      .status(StatusCodes.INTERNAL_SERVER_ERROR)
+      .json({ message: "Server error" });
+  }
+};
+
+export const updateBookDetails = async (req: Request, res: Response) => {
+  try {
+    const book = await Book.findByIdAndUpdate(req.params.id, req.body, {
+      new: true,
+      runValidators: true,
+    });
+    return res.status(StatusCodes.OK).json({
+      success: true,
+      message: "Book updated successfully",
+      book,
+    });
+  } catch (error) {
+    console.error();
+    return res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({});
   }
 };
