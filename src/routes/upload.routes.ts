@@ -6,6 +6,6 @@ import { authenticateToken } from "../middlewares/auth.middleware";
 
 const router = Router();
 
-router.post("/upload", upload.single("image"),authenticateToken,verifyRole("learner"), uploadImage);
+router.post("/upload", authenticateToken, upload.single("image"), uploadImage);
 
 export default router;

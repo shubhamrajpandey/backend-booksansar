@@ -6,6 +6,7 @@ import authRoute from "./routes/auth.routes";
 import otpRoute from "./routes/otp.routes";
 import cors from "cors";
 import uploadRoute from "./routes/upload.routes";
+import bookRoute from "./routes/books.routes";
 
 const app = express();
 
@@ -24,7 +25,8 @@ const PORT = process.env.PORT || 5000;
 
 app.use('/api/auth', authRoute);
 app.use('/api/otp', otpRoute);
-app.use('/api',uploadRoute);
+app.use("/api/upload", uploadRoute);
+app.use("/api/books", bookRoute);
 
 app.listen(PORT, () =>
   console.log(`Server running on port http://localhost:${PORT}`)
