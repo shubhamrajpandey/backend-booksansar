@@ -2,32 +2,26 @@ import { Response, Request } from "express";
 import { uploadBufferToCloudinary } from "../config/cloud";
 import { StatusCodes } from "http-status-codes";
 
-export const uploadImage = async (req: Request, res: Response) => {
+export const uploadFile = async (req: Request, res: Response) => {
   try {
     if (!req.file) {
-      return res.status(400).json({ message: "No file uploaded" });
+      return res.status(StatusCodes.BAD_REQUEST).json({ message: "No file uploaded" });
     }
 
-    const fileBuffer = req.file.buffer;
-
-    const result = await uploadBufferToCloudinary(fileBuffer, "my_app");
+    const result = await uploadBufferToCloudinary(req.file.buffer, "booksansar_uploads");
 
     return res.status(StatusCodes.OK).json({
-      message: "Successfully Image Upload",
+      success: true,
+      message: "File uploaded successfully",
       url: result.secure_url,
       public_id: result.public_id,
+      resource_type: result.resource_type,
+      format: result.format,
     });
-  } catch (error: unknown) {
-    if (error instanceof Error) {
-      res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({
-        success: false,
-        message: error.message,
-      });
-    } else {
-      res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({
-        success: false,
-        message: "An unexpected error occurred",
-      });
-    }
+  } catch (error: any) {
+    return res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({
+      success: false,
+      message: error.message || "Upload failed",
+    });
   }
 };
