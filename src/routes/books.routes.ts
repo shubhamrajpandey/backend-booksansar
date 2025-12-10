@@ -6,6 +6,7 @@ import {
   getAllBooks,
   getSingleBook,
   updateBookDetails,
+  deleteBookDetails,
 } from "../controllers/book.controller";
 
 const router = Router();
@@ -28,4 +29,5 @@ router.put(
   updateBookDetails
 );
 
+router.delete("/:id",deleteBookDetails)
 export default router;

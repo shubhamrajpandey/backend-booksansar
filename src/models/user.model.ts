@@ -1,4 +1,3 @@
-//-----User Model----- 
 import mongoose, { Schema, Document, Model } from "mongoose";
 
 export interface IUser extends Document {
@@ -6,6 +5,7 @@ export interface IUser extends Document {
   email: string;
   password: string;
   role: "learner" | "vendor" | "admin";
+  phoneNumber?: string;
 }
 
 const userSchema: Schema<IUser> = new Schema(
@@ -18,12 +18,16 @@ const userSchema: Schema<IUser> = new Schema(
       enum: ["learner", "vendor", "admin"],
       default: "learner",
     },
+    phoneNumber: {
+      type: String,
+      unique: true,
+      required: function (this: IUser) {
+        return this.role === "vendor";
+      },
+    },
   },
-  {
-    timestamps: true, 
-  }
+  { timestamps: true }
 );
 
 const User: Model<IUser> = mongoose.model<IUser>("User", userSchema);
-
 export default User;
