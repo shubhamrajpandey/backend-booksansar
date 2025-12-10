@@ -220,6 +220,7 @@ export const vendorRegistration = async (req: Request, res: Response) => {
     return res.status(StatusCodes.OK).json({
       success: true,
       message: "Vendor Successfully Created",
+      newUser,
       vendor,
     });
   } catch (error: unknown) {
