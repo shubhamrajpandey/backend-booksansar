@@ -7,19 +7,30 @@ export interface IBook extends Document {
   category: string;
   description?: string;
   coverImage?: string;
-  uploader: mongoose.Types.ObjectId; 
+  additionalImages?: string[];
+  uploader: mongoose.Types.ObjectId;
   createdAt: Date;
-  pdfUrl?: string;                   
-  approved?: boolean;              
+  pdfUrl?: string;
+  approved?: boolean;
   price?: number;
-  stock?: number;                   
-  condition?: "new" | "used-good" | "used-ok"; 
-  vendorId?: mongoose.Types.ObjectId; 
+  mrp?: number;
+  stock?: number;
+  condition?: "new" | "used-good" | "used-ok";
+  vendorId?: mongoose.Types.ObjectId;
   deliveryInfo?: {
-    insideValley: number;
-    outsideValley: number;
+    insideValley?: number;
+    outsideValley?: number;
   };
   visibility: "public" | "pending" | "blocked";
+
+  printedPrice?: number;
+  bookType?: string;
+  language?: string;
+  edition?: string;
+  negotiable?: boolean;
+  sellerName?: string;
+  phone?: string;
+  location?: string;
 }
 
 const BookSchema: Schema = new Schema<IBook>(
@@ -37,6 +48,7 @@ const BookSchema: Schema = new Schema<IBook>(
     description: { type: String },
 
     coverImage: { type: String },
+    additionalImages: [{ type: String }],
 
     uploader: {
       type: Schema.Types.ObjectId,
@@ -49,6 +61,7 @@ const BookSchema: Schema = new Schema<IBook>(
     approved: { type: Boolean, default: false },
 
     price: { type: Number },
+    mrp: { type: Number },
 
     stock: { type: Number, default: 1 },
 
@@ -72,6 +85,15 @@ const BookSchema: Schema = new Schema<IBook>(
       enum: ["public", "pending", "blocked"],
       default: "pending",
     },
+
+    printedPrice: { type: Number },
+    bookType: { type: String },
+    language: { type: String },
+    edition: { type: String },
+    negotiable: { type: Boolean, default: false },
+    sellerName: { type: String },
+    phone: { type: String },
+    location: { type: String },
   },
   {
     timestamps: true,

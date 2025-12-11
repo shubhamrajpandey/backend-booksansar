@@ -11,55 +11,59 @@ export const uploadBookDetails = async (req: Request, res: Response) => {
       category,
       description,
       coverImage,
+      additionalImages,
       pdfUrl,
       price,
+      mrp,
       stock,
       condition,
       deliveryInfo,
+      language,
+      edition,
+      negotiable,
+      sellerName,
+      phone,
+      location,
+      printedPrice,
+      bookType
     } = req.body;
 
     const uploader = req.user?.id;
     const role = req.user?.role;
 
     if (!uploader) {
-      return res
-        .status(StatusCodes.UNAUTHORIZED)
-        .json({ success: false, message: "Unauthorized" });
+      return res.status(StatusCodes.UNAUTHORIZED).json({
+        success: false,
+        message: "Unauthorized",
+      });
     }
 
     if (!type || !title || !author || !category) {
-      return res
-        .status(StatusCodes.BAD_REQUEST)
-        .json({ success: false, message: "Missing required fields" });
+      return res.status(StatusCodes.BAD_REQUEST).json({
+        success: false,
+        message: "Missing required fields",
+      });
     }
 
     if (type === "physical" && role !== "vendor") {
-      return res
-        .status(StatusCodes.FORBIDDEN)
-        .json({
-          success: false,
-          message: "Only vendors can upload physical books",
-        });
+      return res.status(StatusCodes.FORBIDDEN).json({
+        success: false,
+        message: "Only vendors can upload physical books",
+      });
     }
 
     if (type === "second-hand" && role !== "learner") {
-      return res
-        .status(StatusCodes.FORBIDDEN)
-        .json({
-          success: false,
-          message: "Only learners can upload second-hand books",
-        });
+      return res.status(StatusCodes.FORBIDDEN).json({
+        success: false,
+        message: "Only learners can upload second-hand books",
+      });
     }
 
-    if (type === "free") {
-      if (!pdfUrl) {
-        return res
-          .status(StatusCodes.BAD_REQUEST)
-          .json({
-            success: false,
-            message: "Free books must include a PDF URL",
-          });
-      }
+    if (type === "free" && !pdfUrl) {
+      return res.status(StatusCodes.BAD_REQUEST).json({
+        success: false,
+        message: "Free books must include a PDF URL",
+      });
     }
 
     if (type === "physical") {
@@ -73,12 +77,18 @@ export const uploadBookDetails = async (req: Request, res: Response) => {
 
     if (type === "second-hand") {
       if (!price || !condition) {
-        return res
-          .status(StatusCodes.BAD_REQUEST)
-          .json({
-            success: false,
-            message: "Second-hand books require price and condition",
-          });
+        return res.status(StatusCodes.BAD_REQUEST).json({
+          success: false,
+          message: "Second-hand books require price and condition",
+        });
+      }
+
+      const validConditions = ["new", "used-good", "used-ok"];
+      if (!validConditions.includes(condition)) {
+        return res.status(StatusCodes.BAD_REQUEST).json({
+          success: false,
+          message: "Invalid condition. Allowed: new, used-good, used-ok",
+        });
       }
     }
 
@@ -89,13 +99,25 @@ export const uploadBookDetails = async (req: Request, res: Response) => {
       category,
       description,
       coverImage,
+      additionalImages,
       pdfUrl,
       price,
+      mrp,
       stock,
       condition,
       deliveryInfo,
       visibility: "pending",
+
+      language,
+      edition,
+      negotiable,
+      sellerName,
+      phone,
+      location,
+
       uploader,
+      printedPrice,
+      bookType
     });
 
     return res.status(StatusCodes.CREATED).json({
@@ -103,16 +125,18 @@ export const uploadBookDetails = async (req: Request, res: Response) => {
       message: "Book uploaded successfully",
       book,
     });
-  } catch {
-    return res
-      .status(StatusCodes.INTERNAL_SERVER_ERROR)
-      .json({ success: false, message: "Server error" });
+  } catch (error) {
+    console.error(error);
+    return res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({
+      success: false,
+      message: "Server error",
+    });
   }
 };
 
 export const getAllBooks = async (req: Request, res: Response) => {
   try {
-    const book = await Book.find().populate("uploader", "name,email,role");
+    const book = await Book.find().populate("uploader", "name email role");
 
     return res.status(StatusCodes.OK).json({
       success: true,
@@ -133,7 +157,7 @@ export const getSingleBook = async (req: Request, res: Response) => {
   try {
     const book = await Book.findById(req.params.id).populate(
       "uploader",
-      "name,email,role"
+      "name email role"
     );
 
     return res.status(StatusCodes.OK).json({
