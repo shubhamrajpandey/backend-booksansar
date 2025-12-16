@@ -25,7 +25,7 @@ export const uploadBookDetails = async (req: Request, res: Response) => {
       phone,
       location,
       printedPrice,
-      bookType
+      bookType,
     } = req.body;
 
     const uploader = req.user?.id;
@@ -117,7 +117,7 @@ export const uploadBookDetails = async (req: Request, res: Response) => {
 
       uploader,
       printedPrice,
-      bookType
+      bookType,
     });
 
     return res.status(StatusCodes.CREATED).json({
@@ -136,11 +136,37 @@ export const uploadBookDetails = async (req: Request, res: Response) => {
 
 export const getAllBooks = async (req: Request, res: Response) => {
   try {
-    const book = await Book.find().populate("uploader", "name email role");
+    const { search } = req.query;
+
+    const filter: any = {};
+
+    if (search && typeof search === "string") {
+      filter.$or = [
+        { title: { $regex: search, $options: "i" } },
+        { author: { $regex: search, $options: "i" } },
+      ];
+    }
+
+    const page = Number(req.query.page) || 1;
+    const limit = Number(req.query.limit) || 10;
+
+    const safePage = page > 0 ? page:1;
+    const safeLimit = limit > 0 && limit < 100 ? limit : 10;
+
+    const skip = (safePage -1) * safeLimit;
+
+    const book = await Book.find().populate("uploader", "name email role").sort({createdAt: -1}).skip(skip).limit(safeLimit);
+
+    const totalPage = await Book.countDocuments();
+    const totalLimit = Math.ceil(totalPage/safeLimit);
 
     return res.status(StatusCodes.OK).json({
       success: true,
       message: "Book retrived successfully",
+      page:safePage,
+      limit:safeLimit,
+      totalPage,
+      totalLimit,
       book,
     });
   } catch (error) {
@@ -196,8 +222,8 @@ export const deleteBookDetails = async (req: Request, res: Response) => {
     const book = await Book.findByIdAndDelete(req.params.id);
     return res.status(StatusCodes.OK).json({
       success: true,
-      message: "Book deleted successfully"
-    })
+      message: "Book deleted successfully",
+    });
   } catch (error) {
     console.error();
     return res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({
