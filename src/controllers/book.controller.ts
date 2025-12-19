@@ -1,6 +1,7 @@
 import { StatusCodes } from "http-status-codes";
 import { Response, Request } from "express";
 import Book from "../models/book.model";
+import { redisClient } from "../config/redis";
 
 export const uploadBookDetails = async (req: Request, res: Response) => {
   try {
@@ -137,7 +138,6 @@ export const uploadBookDetails = async (req: Request, res: Response) => {
 export const getAllBooks = async (req: Request, res: Response) => {
   try {
     const { search } = req.query;
-
     const filter: any = {};
 
     if (search && typeof search === "string") {
@@ -150,31 +150,40 @@ export const getAllBooks = async (req: Request, res: Response) => {
     const page = Number(req.query.page) || 1;
     const limit = Number(req.query.limit) || 10;
 
-    const safePage = page > 0 ? page:1;
+    const safePage = page > 0 ? page : 1;
     const safeLimit = limit > 0 && limit < 100 ? limit : 10;
 
-    const skip = (safePage -1) * safeLimit;
+    const skip = (safePage - 1) * safeLimit;
 
-    const book = await Book.find().populate("uploader", "name email role").sort({createdAt: -1}).skip(skip).limit(safeLimit);
+    const book = await Book.find(filter)
+      .populate("uploader", "name email role")
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(safeLimit);
 
-    const totalPage = await Book.countDocuments();
-    const totalLimit = Math.ceil(totalPage/safeLimit);
+    const totalPage = await Book.countDocuments(filter);
+    const totalLimit = Math.ceil(totalPage / safeLimit);
 
-    return res.status(StatusCodes.OK).json({
+    const responseData = {
       success: true,
-      message: "Book retrived successfully",
-      page:safePage,
-      limit:safeLimit,
+      message: "Book retrieved successfully",
+      page: safePage,
+      limit: safeLimit,
       totalPage,
       totalLimit,
       book,
-    });
+    };
+
+    if (req.cacheKey) {
+      await redisClient.setEx(req.cacheKey, 60, JSON.stringify(responseData));
+    }
+
+    return res.status(StatusCodes.OK).json(responseData);
   } catch (error) {
-    console.error("");
+    console.error(error);
     return res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({
       success: false,
       message: "Server error",
-      error,
     });
   }
 };
