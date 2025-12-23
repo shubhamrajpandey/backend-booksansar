@@ -1,7 +1,7 @@
 import { StatusCodes } from "http-status-codes";
 import { Response, Request } from "express";
 import Book from "../models/book.model";
-import { redisClient } from "../config/redis";
+// import { redisClient } from "../config/redis";
 
 export const uploadBookDetails = async (req: Request, res: Response) => {
   try {
@@ -174,9 +174,9 @@ export const getAllBooks = async (req: Request, res: Response) => {
       book,
     };
 
-    if (req.cacheKey) {
-      await redisClient.setEx(req.cacheKey, 60, JSON.stringify(responseData));
-    }
+    // if (req.cacheKey) {
+    //   await redisClient.setEx(req.cacheKey, 60, JSON.stringify(responseData));
+    // }
 
     return res.status(StatusCodes.OK).json(responseData);
   } catch (error) {
