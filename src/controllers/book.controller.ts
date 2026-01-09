@@ -32,8 +32,6 @@ export const uploadBookDetails = async (req: Request, res: Response) => {
     const uploader = req.user?.id;
     const role = req.user?.role;
 
-    
-
     if (!uploader) {
       return res.status(StatusCodes.UNAUTHORIZED).json({
         success: false,
@@ -140,7 +138,31 @@ export const uploadBookDetails = async (req: Request, res: Response) => {
 export const getAllBooks = async (req: Request, res: Response) => {
   try {
     const { search } = req.query;
-    const filter: any = {};
+    const filter: any = {
+      visibility: "approved",
+      type: "physical",
+      stock: { $gt: 0 },
+      price: { $gt: 0 },
+      mrp: { $gt: 0 },
+      deliveryInfo: { $exists: true },
+      condition: { $exists: true },
+      sellerName: { $exists: true },
+      phone: { $exists: true },
+      location: { $exists: true },
+      uploader: { $exists: true },
+      printedPrice: { $exists: true },
+      bookType: { $exists: true },
+      coverImage: { $exists: true },
+      additionalImages: { $exists: true },
+      pdfUrl: { $exists: true },
+      language: { $exists: true },
+      edition: { $exists: true },
+      negotiable: { $exists: true },
+      title: { $exists: true },
+      author: { $exists: true },
+      category: { $exists: true },
+      description: { $exists: true },
+    };
 
     if (search && typeof search === "string") {
       filter.$or = [
