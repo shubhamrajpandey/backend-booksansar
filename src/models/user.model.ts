@@ -21,6 +21,7 @@ const userSchema: Schema<IUser> = new Schema(
     phoneNumber: {
       type: String,
       unique: true,
+      sparse: true,
       required: function (this: IUser) {
         return this.role === "vendor";
       },
