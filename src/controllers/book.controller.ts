@@ -137,32 +137,52 @@ export const uploadBookDetails = async (req: Request, res: Response) => {
 
 export const getAllBooks = async (req: Request, res: Response) => {
   try {
-    const { search } = req.query;
+    const {
+      search,
+      type,
+      category,
+      location,
+      author,
+      minPrice,
+      maxPrice,
+      availability,
+    } = req.query;
+
     const filter: any = {
       visibility: "approved",
-      type: "physical",
-      stock: { $gt: 0 },
-      price: { $gt: 0 },
-      mrp: { $gt: 0 },
-      deliveryInfo: { $exists: true },
-      condition: { $exists: true },
-      sellerName: { $exists: true },
-      phone: { $exists: true },
-      location: { $exists: true },
-      uploader: { $exists: true },
-      printedPrice: { $exists: true },
-      bookType: { $exists: true },
-      coverImage: { $exists: true },
-      additionalImages: { $exists: true },
-      pdfUrl: { $exists: true },
-      language: { $exists: true },
-      edition: { $exists: true },
-      negotiable: { $exists: true },
-      title: { $exists: true },
-      author: { $exists: true },
-      category: { $exists: true },
-      description: { $exists: true },
     };
+
+    if (type && typeof type === "string") {
+      filter.type = type;
+    } else {
+      filter.type = "physical";
+    }
+
+    if (availability === "in-stock") {
+      filter.stock = { $gt: 0 };
+    }
+
+    if (availability === "out-of-stock") {
+      filter.stock = { $lte: 0 };
+    }
+
+    if (minPrice || maxPrice) {
+      filter.price = {};
+      if (minPrice) filter.price.$gte = Number(minPrice);
+      if (maxPrice) filter.price.$lte = Number(maxPrice);
+    }
+
+    if (category && typeof category === "string") {
+      filter.category = { $in: category.split(",") };
+    }
+
+    if (location && typeof location === "string") {
+      filter.location = location;
+    }
+
+    if (author && typeof author === "string") {
+      filter.author = { $regex: author, $options: "i" };
+    }
 
     if (search && typeof search === "string") {
       filter.$or = [
@@ -188,7 +208,7 @@ export const getAllBooks = async (req: Request, res: Response) => {
     const totalPage = await Book.countDocuments(filter);
     const totalLimit = Math.ceil(totalPage / safeLimit);
 
-    const responseData = {
+    return res.status(StatusCodes.OK).json({
       success: true,
       message: "Book retrieved successfully",
       page: safePage,
@@ -196,15 +216,8 @@ export const getAllBooks = async (req: Request, res: Response) => {
       totalPage,
       totalLimit,
       book,
-    };
-
-    // if (req.cacheKey) {
-    //   await redisClient.setEx(req.cacheKey, 60, JSON.stringify(responseData));
-    // }
-
-    return res.status(StatusCodes.OK).json(responseData);
+    });
   } catch (error) {
-    console.error(error);
     return res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({
       success: false,
       message: "Server error",
