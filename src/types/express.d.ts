@@ -10,9 +10,9 @@ declare global {
 
     interface Request {
       user?: UserPayload;
-      file?: Multer.File;        
-      files?: Multer.File[];      
-       cacheKey?: string;
+      file?: Multer.File;
+      files?: Multer.File[];
+      cacheKey?: string;
     }
   }
 }
