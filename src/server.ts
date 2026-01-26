@@ -10,6 +10,7 @@ import uploadRoute from "./routes/upload.routes";
 import bookRoute from "./routes/books.routes";
 import http from "http";
 import { initSocket } from "./services/socket.service";
+import adminRoute from "./routes/admin.routes";
 
 const app = express();
 
@@ -36,6 +37,7 @@ app.use("/api/otp", otpRoute);
 app.use("/api/upload", uploadRoute);
 app.use("/api/books", bookRoute);
 app.use("/api/chat", chatRoute);
+app.use("/api/admin", adminRoute);
 
 server.listen(PORT, () =>
   console.log(`Server running on port http://localhost:${PORT}`),
