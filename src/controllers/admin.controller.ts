@@ -1,7 +1,10 @@
 import { StatusCodes } from "http-status-codes";
 import { Response, Request } from "express";
 import User from "../models/user.model";
+import Vendor from "../models/vendor.model";
+import sendEmail from "../services/mail.service";
 
+//get users(learner,vendor) by filtering        
 export const getAllUsers = async( req:Request, res:Response)=>{
     try {
         const user = await User.find();
@@ -57,6 +60,7 @@ export const getAllUsers = async( req:Request, res:Response)=>{
 
 }
 
+//suspend user
 export const deleteUser = async( req:Request, res:Response)=>{
     try {
         const user = await User.findByIdAndDelete(req.params.id);
@@ -73,6 +77,64 @@ export const deleteUser = async( req:Request, res:Response)=>{
             message:"User deleted successfully"
         })
     } catch (error) {
+        return res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({
+            success:false,
+            message:"Server error"
+        })
+    }
+}
+
+//approve vendor
+export const approveVendor = async( req:Request, res:Response)=>{
+    try {
+        const vendorId = req.params.id;
+        if (!vendorId) {
+            return res.status(StatusCodes.BAD_REQUEST).json({
+                success: false,
+                message: "Vendor ID required"
+            });
+        }
+
+        const vendor = await Vendor.findById(vendorId);
+        if (!vendor) {
+            return res.status(404).json({
+                success: false,
+                message: "Vendor not found"
+            });
+        }
+
+        if (vendor.approved) {
+            return res.status(400).json({
+                success: false,
+                message: "Vendor already approved"
+            });
+        }
+
+        vendor.approved = true;
+        await vendor.save();
+
+        
+        return res.status(StatusCodes.OK).json({
+            success:true,
+            message:"Vendor approved successfully",
+            data:vendor
+        });
+
+    } catch (error) {
+        console.error('Approve vendor error:', error);
+        return res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({
+            success:false,
+            message:"Server error"
+        })
+    }
+}
+
+//send email to vendor when approved
+export const notifyVendorApprova = async(req:Request, res:Response)=>{
+    try {
+        
+    } catch (error) {
+        console.error('Notify vendor approval error:', error);
         return res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({
             success:false,
             message:"Server error"
