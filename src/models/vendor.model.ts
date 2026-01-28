@@ -13,6 +13,8 @@ export interface IVendor extends Document {
   panVatNumber: string;
   storeLogoUrl?: string;
 
+  approved?: boolean;
+
   esewaId: string;
   paymentType: "escrow";
 
@@ -28,6 +30,7 @@ const vendorSchema: Schema = new Schema<IVendor>(
     address: { type: String, required: true },
     province: { type: String, required: true },
     district: { type: String, required: true },
+    approved: { type: Boolean, default: false },
 
     businessCertUrl: { type: String, required: true },
     governmentIdUrl: { type: String, required: true },
