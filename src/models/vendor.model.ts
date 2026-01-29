@@ -1,7 +1,12 @@
 import mongoose, { Schema, Document, Model } from "mongoose";
 
+export interface IUserPopulated {
+  _id: mongoose.Types.ObjectId;
+  email: string;
+}
+
 export interface IVendor extends Document {
-  userId: mongoose.Types.ObjectId;
+ userId: mongoose.Types.ObjectId | IUserPopulated;
   storeName: string;
   businessType: string;
   address: string;
