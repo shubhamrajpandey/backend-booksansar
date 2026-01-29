@@ -5,6 +5,7 @@ import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 import Vendor from "../models/vendor.model";
 
+//user registration
 export const userRegister = async (req: Request, res: Response) => {
   try {
     const { name, email, password } = req.body;
@@ -65,6 +66,7 @@ export const userRegister = async (req: Request, res: Response) => {
   }
 };
 
+//user login
 export const userLogin = async (req: Request, res: Response) => {
   try {
     const { email, password } = req.body;
@@ -107,6 +109,16 @@ export const userLogin = async (req: Request, res: Response) => {
       role: user.role,
     };
 
+    if(user.role === "vendor"){
+      const vendorProfile = await Vendor.findOne({ userId: user._id, status: "approved" });
+      if(!vendorProfile){
+        return res.status(StatusCodes.FORBIDDEN).json({
+          success: false,
+          message: "Vendor profile not approved yet.",
+        });
+      }
+    }
+
     res.status(StatusCodes.OK).json({
       success: true,
       message: "Successfully Logged In.",
@@ -128,6 +140,7 @@ export const userLogin = async (req: Request, res: Response) => {
   }
 };
 
+//Vendor Registration
 export const vendorRegistration = async (req: Request, res: Response) => {
   try {
     const {

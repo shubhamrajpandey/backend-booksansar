@@ -84,123 +84,140 @@ export const deleteUser = async (req: Request, res: Response) => {
   }
 };
 
-//approve vendor
-export const approveVendor = async (req: Request, res: Response) => {
+//approve vendor and send email notification
+export const updateVendorStatus = async (req: Request, res: Response) => {
   try {
-    const vendorId = req.params.id;
-    if (!vendorId) {
+    const { id } = req.params;
+    const { status } = req.body;
+
+    if (!id || !status) {
       return res.status(StatusCodes.BAD_REQUEST).json({
         success: false,
-        message: "Vendor ID required",
+        message: "Vendor ID and status are required",
       });
     }
 
-    const vendor = await Vendor.findById(vendorId);
+    if (!["pending", "approved", "rejected"].includes(status)) {
+      return res.status(StatusCodes.BAD_REQUEST).json({
+        success: false,
+        message: "Invalid status value",
+      });
+    }
+
+    const vendor = await Vendor.findById(id).populate("userId", "email");
     if (!vendor) {
-      return res.status(404).json({
+      return res.status(StatusCodes.NOT_FOUND).json({
         success: false,
         message: "Vendor not found",
       });
     }
 
-    if (vendor.approved) {
-      return res.status(400).json({
+    if (vendor.status === status) {
+      return res.status(StatusCodes.BAD_REQUEST).json({
         success: false,
-        message: "Vendor already approved",
+        message: `Vendor is already ${status}`,
       });
     }
 
-    vendor.approved = true;
+    vendor.status = status;
     await vendor.save();
 
-    return res.status(StatusCodes.OK).json({
-      success: true,
-      message: "Vendor approved successfully",
-      data: vendor,
-    });
-  } catch (error) {
-    console.error("Approve vendor error:", error);
-    return res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({
-      success: false,
-      message: "Server error",
-    });
-  }
-};
-
-//send email to vendor when approved
-export const notifyVendorApprova = async (req: Request, res: Response) => {
-  try {
-    const { email, storeName } = req.body;
-
-    if (!email || !storeName) {
-      return res.status(StatusCodes.BAD_REQUEST).json({
+    if (typeof vendor.userId !== "object" || !("email" in vendor.userId)) {
+      return res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({
         success: false,
-        message: "Email and store name are required",
+        message: "Vendor user email not populated",
       });
+    }
+
+    const email = vendor.userId.email;
+    const { storeName } = vendor;
+
+    let subject = "";
+    let heading = "";
+    let bodyMessage = "";
+    let extraMessage = "";
+
+    switch (status) {
+      case "approved":
+        subject = "Vendor Application Approved - BookSansar";
+        heading = "Vendor Application Approved";
+        bodyMessage =
+          "Congratulations! Your vendor application has been approved. You can now start selling on BookSansar.";
+        extraMessage = `
+      <p style="margin-top:20px; font-size:14px; color:#4b5563;">
+        Please log in to your vendor account using the email address and password
+        you provided during the registration process.
+      </p>
+    `;
+        break;
+
+      case "rejected":
+        subject = "Vendor Application Rejected - BookSansar";
+        heading = "Vendor Application Rejected";
+        bodyMessage =
+          "Unfortunately, your vendor application was rejected after review. You may contact support for more details.";
+        break;
+
+      case "pending":
+        subject = "Vendor Application Under Review - BookSansar";
+        heading = "Vendor Application Under Review";
+        bodyMessage =
+          "Your vendor application is currently under review. We will notify you once a decision is made.";
+        break;
     }
 
     await sendEmail(
       email,
-      "Vendor Application Approved - BookSansar",
-      `Vendor Application Approved`,
+      subject,
+      heading,
       `
-       <div style="font-family:'Inter', Arial, sans-serif; max-width:600px; margin:auto; border:1px solid #e5e7eb; border-radius:12px; overflow:hidden; box-shadow:0 4px 12px rgba(0,0,0,0.08);">
-    
-       <!-- Header -->
-       <div style="background-color:#321874; color:#ffffff; text-align:center; padding:24px 0;">
-       <h1 style="margin:0; font-size:28px; font-family:'Sedgwick Ave', cursive; letter-spacing:1px;">
+  <div style="font-family:'Inter', Arial, sans-serif; max-width:600px; margin:auto; border:1px solid #e5e7eb; border-radius:12px; overflow:hidden; box-shadow:0 4px 12px rgba(0,0,0,0.08);">
+
+    <!-- Header -->
+    <div style="background-color:#321874; color:#ffffff; text-align:center; padding:24px 0;">
+      <h1 style="margin:0; font-size:28px; font-family:'Sedgwick Ave', cursive; letter-spacing:1px;">
         <span style="color:#ffffff;">Book</span><span style="color:#E68A00;">Sansar</span>
-       </h1>
-       <p style="margin:6px 0 0; font-size:14px; color:#e0e0e0;">
+      </h1>
+      <p style="margin:6px 0 0; font-size:14px; color:#e0e0e0;">
         Your digital reading companion
-       </p>
-       </div>
+      </p>
+    </div>
 
-       <!-- Body -->
-       <div style="padding:32px 24px; text-align:center; color:#1f2937;">
-       <h2 style="margin-bottom:12px; color:#321874;">
-        Vendor Application Approved 
-       </h2>
+    <!-- Body -->
+    <div style="padding:32px 24px; color:#1f2937;">
+      <h2 style="margin-bottom:12px; color:#321874; text-align:center;">
+        ${heading}
+      </h2>
 
-       <p style="margin:0 0 20px; font-size:15px; line-height:1.6; color:#4b5563;">
+      <p style="font-size:15px; line-height:1.6; color:#4b5563;">
         Dear <strong>${storeName}</strong>,
-       </p>
+      </p>
 
-       <p style="margin:0 0 24px; font-size:15px; line-height:1.6; color:#4b5563;">
-        Congratulations! Your vendor application has been successfully approved.
-        You can now start listing and managing your products on <strong>BookSansar</strong>.
-       </p>
+      <p style="font-size:15px; line-height:1.6; color:#4b5563;">
+        ${bodyMessage}
+      </p>
 
-       <!-- Info Box -->
-       <div style="background:#fdfaf6; border:2px solid #E68A00; border-radius:10px; padding:18px 24px; margin:24px 0;">
-        <p style="margin:0; font-size:15px; color:#374151; line-height:1.6;">
-          Please log in to your vendor account using the email address and password
-          you provided during the registration process.
-        </p>
-       </div>
+      ${extraMessage || ""}
 
-       <p style="margin-top:20px; font-size:14px; color:#6b7280;">
-        If you have any questions, feel free to contact our support team.
-       </p>
-       </div>
+    </div>
 
-       <!-- Footer -->
-       <div style="background-color:#f9fafb; text-align:center; padding:16px; font-size:13px; color:#9ca3af;">
+    <!-- Footer -->
+    <div style="background-color:#f9fafb; text-align:center; padding:16px; font-size:13px; color:#9ca3af;">
       &copy; 2025 <span style="color:#321874; font-weight:600;">BookSansar</span>. All rights reserved.
-      </div>
-      </div>
+    </div>
+  </div>
 
-      <!-- Google Fonts -->
-      <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Sedgwick+Ave&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Sedgwick+Ave&display=swap" rel="stylesheet">
   `,
     );
 
     return res.status(StatusCodes.OK).json({
       success: true,
-      message: "Approval email sent to vendor successfully",
+      message: `Vendor ${status} successfully and notified`,
+      data: vendor,
     });
   } catch (error) {
-    console.error("Notify vendor approval error:", error);
+    console.error("Update vendor status error:", error);
     return res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({
       success: false,
       message: "Server error",
