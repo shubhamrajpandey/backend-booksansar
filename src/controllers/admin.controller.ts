@@ -3,6 +3,8 @@ import { Response, Request } from "express";
 import User from "../models/user.model";
 import Vendor from "../models/vendor.model";
 import sendEmail from "../services/mail.service";
+import Category from "../models/category.model";
+import Book from "../models/book.model";
 
 //get users(learner,vendor) by filtering
 export const getAllUsers = async (req: Request, res: Response) => {
@@ -218,6 +220,219 @@ export const updateVendorStatus = async (req: Request, res: Response) => {
     });
   } catch (error) {
     console.error("Update vendor status error:", error);
+    return res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({
+      success: false,
+      message: "Server error",
+    });
+  }
+};
+
+// Get all categories
+export const getAllCategories = async (req: Request, res: Response) => {
+  try {
+    const categories = await Category.find().sort({ name: 1 });
+    
+    return res.status(StatusCodes.OK).json({
+      success: true,
+      data: categories,
+      count: categories.length,
+    });
+  } catch (error) {
+    console.error("Error fetching categories:", error);
+    return res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({
+      success: false,
+      message: "Server error",
+    });
+  }
+};
+
+// Get single category
+export const getCategoryById = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    
+    const category = await Category.findById(id);
+    
+    if (!category) {
+      return res.status(StatusCodes.NOT_FOUND).json({
+        success: false,
+        message: "Category not found",
+      });
+    }
+    
+    return res.status(StatusCodes.OK).json({
+      success: true,
+      data: category,
+    });
+  } catch (error) {
+    console.error("Error fetching category:", error);
+    return res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({
+      success: false,
+      message: "Server error",
+    });
+  }
+};
+
+// Add new category
+export const addCategory = async (req: Request, res: Response) => {
+  try {
+    const { name, description } = req.body;
+    
+    if (!name || name.trim() === "") {
+      return res.status(StatusCodes.BAD_REQUEST).json({
+        success: false,
+        message: "Category name is required",
+      });
+    }
+    
+    const slug = name
+      .toLowerCase()
+      .trim()
+      .replace(/[^\w\s-]/g, "")
+      .replace(/\s+/g, "-");
+    
+    const existingCategory = await Category.findOne({
+      $or: [{ name: name.trim() }, { slug }],
+    });
+    
+    if (existingCategory) {
+      return res.status(StatusCodes.CONFLICT).json({
+        success: false,
+        message: "Category already exists",
+      });
+    }
+    
+    const category = await Category.create({
+      name: name.trim(),
+      slug,
+      description: description?.trim(),
+    });
+    
+    return res.status(StatusCodes.CREATED).json({
+      success: true,
+      message: "Category created successfully",
+      data: category,
+    });
+  } catch (error) {
+    console.error("Error creating category:", error);
+    return res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({
+      success: false,
+      message: "Server error",
+    });
+  }
+};
+
+// Update category
+export const updateCategory = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { name, description, isActive } = req.body;
+    
+    const category = await Category.findById(id);
+    
+    if (!category) {
+      return res.status(StatusCodes.NOT_FOUND).json({
+        success: false,
+        message: "Category not found",
+      });
+    }
+    
+    if (name && name.trim() !== category.name) {
+      const slug = name
+        .toLowerCase()
+        .trim()
+        .replace(/[^\w\s-]/g, "")
+        .replace(/\s+/g, "-");
+      
+      const existingCategory = await Category.findOne({
+        _id: { $ne: id },
+        $or: [{ name: name.trim() }, { slug }],
+      });
+      
+      if (existingCategory) {
+        return res.status(StatusCodes.CONFLICT).json({
+          success: false,
+          message: "Category name already exists",
+        });
+      }
+      
+      category.name = name.trim();
+      category.slug = slug;
+    }
+    
+    if (description !== undefined) {
+      category.description = description?.trim();
+    }
+    
+    if (isActive !== undefined) {
+      category.isActive = isActive;
+    }
+    
+    await category.save();
+    
+    return res.status(StatusCodes.OK).json({
+      success: true,
+      message: "Category updated successfully",
+      data: category,
+    });
+  } catch (error) {
+    console.error("Error updating category:", error);
+    return res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({
+      success: false,
+      message: "Server error",
+    });
+  }
+};
+
+// Delete category
+export const deleteCategory = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    
+    const category = await Category.findById(id);
+    
+    if (!category) {
+      return res.status(StatusCodes.NOT_FOUND).json({
+        success: false,
+        message: "Category not found",
+      });
+    }
+
+    const booksCount = await Book.countDocuments({ category: category.name });
+    
+    if (booksCount > 0) {
+      return res.status(StatusCodes.CONFLICT).json({
+        success: false,
+        message: `Cannot delete category. ${booksCount} book(s) are using this category`,
+      });
+    }
+    
+    await Category.findByIdAndDelete(id);
+    
+    return res.status(StatusCodes.OK).json({
+      success: true,
+      message: "Category deleted successfully",
+    });
+  } catch (error) {
+    console.error("Error deleting category:", error);
+    return res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({
+      success: false,
+      message: "Server error",
+    });
+  }
+};
+
+// Get active categories only (for public use)
+export const getActiveCategories = async (req: Request, res: Response) => {
+  try {
+    const categories = await Category.find({ isActive: true }).sort({ name: 1 });
+    
+    return res.status(StatusCodes.OK).json({
+      success: true,
+      data: categories,
+    });
+  } catch (error) {
+    console.error("Error fetching active categories:", error);
     return res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({
       success: false,
       message: "Server error",

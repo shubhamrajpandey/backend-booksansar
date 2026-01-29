@@ -1,5 +1,10 @@
 import { Router } from "express";
-import { getAllUsers, deleteUser, updateVendorStatus } from "../controllers/admin.controller";
+import { getAllUsers, deleteUser, updateVendorStatus, getAllCategories,
+  getCategoryById,
+  addCategory,
+  updateCategory,
+  deleteCategory,
+  getActiveCategories, } from "../controllers/admin.controller";
 import { verifyRole } from "../middlewares/role.middleware";
 import { authenticateToken } from "../middlewares/auth.middleware";
 
@@ -16,6 +21,13 @@ router.patch(
   updateVendorStatus
 );
 
+router.get("/active", getActiveCategories);
+
+router.get("/", getAllCategories);
+router.get("/:id", getCategoryById);
+router.post("/", addCategory);
+router.put("/:id", updateCategory);
+router.delete("/:id", deleteCategory);
 
 export default router;
     
