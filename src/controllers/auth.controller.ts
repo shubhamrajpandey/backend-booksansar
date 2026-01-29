@@ -96,6 +96,23 @@ export const userLogin = async (req: Request, res: Response) => {
       });
     }
 
+    if (user.role === "vendor") {
+      const vendorProfile = await Vendor.findOne({ userId: user._id });
+      if (!vendorProfile) {
+        return res.status(StatusCodes.FORBIDDEN).json({
+          success: false,
+          message: "Vendor profile not found.",
+        });
+      }
+
+      if (vendorProfile.status !== "approved") {
+        return res.status(StatusCodes.FORBIDDEN).json({
+          success: false,
+          message: "Vendor profile not approved yet.",
+        });
+      }
+    }
+
     const token = jwt.sign(
       { id: user._id, role: user.role },
       process.env.JWT_SECRET as string,
@@ -108,16 +125,6 @@ export const userLogin = async (req: Request, res: Response) => {
       email: user.email,
       role: user.role,
     };
-
-    if(user.role === "vendor"){
-      const vendorProfile = await Vendor.findOne({ userId: user._id, status: "approved" });
-      if(!vendorProfile){
-        return res.status(StatusCodes.FORBIDDEN).json({
-          success: false,
-          message: "Vendor profile not approved yet.",
-        });
-      }
-    }
 
     res.status(StatusCodes.OK).json({
       success: true,
