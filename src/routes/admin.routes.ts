@@ -4,7 +4,7 @@ import { getAllUsers, deleteUser, updateVendorStatus, getAllCategories,
   addCategory,
   updateCategory,
   deleteCategory,
-  getActiveCategories, } from "../controllers/admin.controller";
+  getActiveCategories, moderateFreeBook } from "../controllers/admin.controller";
 import { verifyRole } from "../middlewares/role.middleware";
 import { authenticateToken } from "../middlewares/auth.middleware";
 
@@ -28,6 +28,13 @@ router.get("/:id", getCategoryById);
 router.post("/", addCategory);
 router.put("/:id", updateCategory);
 router.delete("/:id", deleteCategory);
+
+router.patch(
+  "/books/:id/moderate",
+  authenticateToken,
+  verifyRole("admin"),
+  moderateFreeBook
+);
 
 export default router;
     

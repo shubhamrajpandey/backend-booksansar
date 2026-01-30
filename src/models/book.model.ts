@@ -9,9 +9,7 @@ export interface IBook extends Document {
   coverImage?: string;
   additionalImages?: string[];
   uploader: mongoose.Types.ObjectId;
-  createdAt: Date;
   pdfUrl?: string;
-  approved?: boolean;
   price?: number;
   mrp?: number;
   stock?: number;
@@ -22,7 +20,6 @@ export interface IBook extends Document {
     outsideValley?: number;
   };
   visibility: "public" | "pending" | "blocked";
-
   printedPrice?: number;
   bookType?: string;
   language?: string;
@@ -31,6 +28,8 @@ export interface IBook extends Document {
   sellerName?: string;
   phone?: string;
   location?: string;
+  createdAt: Date;
+  updatedAt: Date;
 }
 
 const BookSchema: Schema = new Schema<IBook>(
@@ -46,7 +45,6 @@ const BookSchema: Schema = new Schema<IBook>(
     category: { type: String, required: true },
 
     description: { type: String },
-
     coverImage: { type: String },
     additionalImages: [{ type: String }],
 
@@ -58,12 +56,10 @@ const BookSchema: Schema = new Schema<IBook>(
 
     pdfUrl: { type: String },
 
-    approved: { type: Boolean, default: false },
-
     price: { type: Number },
     mrp: { type: Number },
 
-    stock: { type: Number, default: 1 },
+    stock: { type: Number },
 
     condition: {
       type: String,
@@ -83,14 +79,14 @@ const BookSchema: Schema = new Schema<IBook>(
     visibility: {
       type: String,
       enum: ["public", "pending", "blocked"],
-      default: "pending",
+      required: true,
     },
 
     printedPrice: { type: Number },
     bookType: { type: String },
     language: { type: String },
     edition: { type: String },
-    negotiable: { type: Boolean, default: false },
+    negotiable: { type: Boolean },
     sellerName: { type: String },
     phone: { type: String },
     location: { type: String },
@@ -99,6 +95,13 @@ const BookSchema: Schema = new Schema<IBook>(
     timestamps: true,
   }
 );
+
+BookSchema.pre("validate", function (next) {
+  if (!this.visibility) {
+    this.visibility = this.type === "free" ? "pending" : "public";
+  }
+  next();
+});
 
 const Book: Model<IBook> = mongoose.model<IBook>("Book", BookSchema);
 
