@@ -439,3 +439,51 @@ export const getActiveCategories = async (req: Request, res: Response) => {
     });
   }
 };
+
+//moderate free book submissions
+export const moderateFreeBook = async (req: Request, res: Response) => {
+  const { id } = req.params;
+  const { action } = req.body; 
+
+  if (!["approve", "reject"].includes(action)) {
+    return res.status(StatusCodes.BAD_REQUEST).json({
+      success: false,
+      message: "Invalid action. Use 'approve' or 'reject'",
+    });
+  }
+
+  const book = await Book.findById(id);
+
+  if (!book) {
+    return res.status(StatusCodes.NOT_FOUND).json({
+      success: false,
+      message: "Book not found",
+    });
+  }
+
+  if (book.type !== "free") {
+    return res.status(StatusCodes.BAD_REQUEST).json({
+      success: false,
+      message: "Only free books require admin approval",
+    });
+  }
+
+  if (book.visibility !== "pending") {
+    return res.status(StatusCodes.BAD_REQUEST).json({
+      success: false,
+      message: `Book is already ${book.visibility}`,
+    });
+  }
+
+  book.visibility = action === "approve" ? "public" : "blocked";
+  await book.save();
+
+  res.status(StatusCodes.OK).json({
+    success: true,
+    message:
+      action === "approve"
+        ? "Free book approved and is now public"
+        : "Free book rejected",
+    data: book,
+  });
+};
