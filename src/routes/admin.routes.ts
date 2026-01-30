@@ -7,6 +7,8 @@ import { getAllUsers, deleteUser, updateVendorStatus, getAllCategories,
   getActiveCategories, moderateFreeBook } from "../controllers/admin.controller";
 import { verifyRole } from "../middlewares/role.middleware";
 import { authenticateToken } from "../middlewares/auth.middleware";
+import { getPendingFreeBooks } from "../controllers/admin.controller";
+import { get } from "http";
 
 const router = Router();
 
@@ -35,6 +37,8 @@ router.patch(
   verifyRole("admin"),
   moderateFreeBook
 );
+
+router.get("/books/pending",authenticateToken,verifyRole("admin"),getPendingFreeBooks);
 
 export default router;
     

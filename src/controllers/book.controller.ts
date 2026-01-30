@@ -9,6 +9,7 @@ export const uploadBookDetails = async (req: Request, res: Response) => {
       title,
       author,
       category,
+      genre,
       description,
       coverImage,
       additionalImages,
@@ -94,6 +95,7 @@ export const uploadBookDetails = async (req: Request, res: Response) => {
       title,
       author,
       category,
+      genre,
       description,
       coverImage,
       additionalImages,
@@ -133,6 +135,7 @@ export const getAllBooks = async (req: Request, res: Response) => {
       search,
       type,
       category,
+      genre,
       location,
       author,
       minPrice,
@@ -173,6 +176,10 @@ export const getAllBooks = async (req: Request, res: Response) => {
       filter.category = { $in: category.split(",") };
     }
 
+    if(genre && typeof genre === "string"){
+      filter.genre = { $in: genre.split(",") };
+    }
+    
     if (location && typeof location === "string") {
       filter.location = location;
     }
