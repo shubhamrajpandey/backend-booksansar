@@ -5,6 +5,7 @@ export interface IBook extends Document {
   title: string;
   author: string;
   category: string;
+  genre?: string;
   description?: string;
   coverImage?: string;
   additionalImages?: string[];
@@ -20,6 +21,7 @@ export interface IBook extends Document {
     outsideValley?: number;
   };
   visibility: "public" | "pending" | "blocked";
+  
   printedPrice?: number;
   bookType?: string;
   language?: string;
@@ -43,6 +45,7 @@ const BookSchema: Schema = new Schema<IBook>(
     title: { type: String, required: true },
     author: { type: String, required: true },
     category: { type: String, required: true },
+    genre: { type: String },
 
     description: { type: String },
     coverImage: { type: String },

@@ -487,3 +487,21 @@ export const moderateFreeBook = async (req: Request, res: Response) => {
     data: book,
   });
 };
+
+//get all pending books of type free
+export const getPendingFreeBooks = async (req: Request, res: Response) => {
+  try {
+    const pendingBooks = await Book.find({ type: "free", visibility: "pending" });
+
+    return res.status(StatusCodes.OK).json({
+      success: true,
+      message: "Pending free books fetched successfully",
+      data: pendingBooks,
+    });
+  } catch (error) {
+    return res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({
+      success: false,
+      message: "Server error",
+    });
+  }
+};
