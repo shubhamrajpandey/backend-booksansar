@@ -21,7 +21,8 @@ export interface IBook extends Document {
     outsideValley?: number;
   };
   visibility: "public" | "pending" | "blocked";
-  
+  rating?: number;
+  reviewsCount?: number;
   printedPrice?: number;
   bookType?: string;
   language?: string;
@@ -85,6 +86,8 @@ const BookSchema: Schema = new Schema<IBook>(
       required: true,
     },
 
+    rating: { type: Number, default: 0 },
+    reviewsCount: { type: Number, default: 0 },
     printedPrice: { type: Number },
     bookType: { type: String },
     language: { type: String },
@@ -99,12 +102,6 @@ const BookSchema: Schema = new Schema<IBook>(
   }
 );
 
-BookSchema.pre("validate", function (next) {
-  if (!this.visibility) {
-    this.visibility = this.type === "free" ? "pending" : "public";
-  }
-  next();
-});
 
 const Book: Model<IBook> = mongoose.model<IBook>("Book", BookSchema);
 
