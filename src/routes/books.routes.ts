@@ -14,7 +14,7 @@ const router = Router();
 router.post(
   "/",
   authenticateToken,
-  verifyRole("vendor", "learner"), 
+  verifyRole("vendor", "learner","admin"), 
   uploadBookDetails
 );
 
@@ -22,7 +22,7 @@ router.get("/", getAllBooks);
 
 router.get("/:id", getSingleBook);
 
-router.put(
+router.patch(
   "/:id",
   authenticateToken,
   verifyRole("vendor", "learner", "admin"),

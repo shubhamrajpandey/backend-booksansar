@@ -2,8 +2,16 @@ import { StatusCodes } from "http-status-codes";
 import { Request, Response } from "express";
 import Book from "../models/book.model";
 
+
 export const uploadBookDetails = async (req: Request, res: Response) => {
   try {
+    if (!req.user) {
+      return res.status(StatusCodes.UNAUTHORIZED).json({
+        success: false,
+        message: "Authentication required",
+      });
+    }
+
     const {
       type,
       title,
@@ -19,6 +27,7 @@ export const uploadBookDetails = async (req: Request, res: Response) => {
       stock,
       condition,
       deliveryInfo,
+      rating,
       language,
       edition,
       negotiable,
@@ -29,71 +38,102 @@ export const uploadBookDetails = async (req: Request, res: Response) => {
       bookType,
     } = req.body;
 
-    const uploader = req.user?.id;
-    const role = req.user?.role;
-
-    if (!uploader) {
-      return res.status(StatusCodes.UNAUTHORIZED).json({
-        success: false,
-        message: "Unauthorized",
-      });
-    }
+    const uploader = req.user.id;
+    const role = req.user.role;
 
     if (!type || !title || !author || !category) {
       return res.status(StatusCodes.BAD_REQUEST).json({
         success: false,
-        message: "Missing required fields",
+        message: "type, title, author, and category are required",
       });
     }
 
-    if (type === "physical" && role !== "vendor") {
-      return res.status(StatusCodes.FORBIDDEN).json({
-        success: false,
-        message: "Only vendors can upload physical books",
-      });
-    }
-
-    if (type === "second-hand" && role !== "learner") {
-      return res.status(StatusCodes.FORBIDDEN).json({
-        success: false,
-        message: "Only learners can upload second-hand books",
-      });
-    }
-
-    if (type === "free" && !pdfUrl) {
+    if (!["free", "physical", "second-hand"].includes(type)) {
       return res.status(StatusCodes.BAD_REQUEST).json({
         success: false,
-        message: "Free books must include a PDF URL",
+        message: "Invalid book type",
       });
     }
 
-    if (type === "physical" && (!price || !stock || !deliveryInfo)) {
-      return res.status(StatusCodes.BAD_REQUEST).json({
+    if (type === "physical" && role !== "vendor" && role !== "admin") {
+      return res.status(StatusCodes.FORBIDDEN).json({
         success: false,
-        message: "Physical books require price, stock, and delivery info",
+        message: "Only vendors or admins can upload physical books",
       });
+    }
+
+    if (type === "second-hand" && role !== "learner" && role !== "admin") {
+      return res.status(StatusCodes.FORBIDDEN).json({
+        success: false,
+        message: "Only learners or admins can upload second-hand books",
+      });
+    }
+
+    if (type === "free") {
+      if (!pdfUrl) {
+        return res.status(StatusCodes.BAD_REQUEST).json({
+          success: false,
+          message: "Free books must include a PDF URL",
+        });
+      }
+    }
+
+    if (type === "physical") {
+      if (
+        price === undefined ||
+        stock === undefined ||
+        !deliveryInfo
+      ) {
+        return res.status(StatusCodes.BAD_REQUEST).json({
+          success: false,
+          message:
+            "Physical books require price, stock, and delivery information",
+        });
+      }
+
+      if (price < 0 || stock < 0) {
+        return res.status(StatusCodes.BAD_REQUEST).json({
+          success: false,
+          message: "Price and stock cannot be negative",
+        });
+      }
     }
 
     if (type === "second-hand") {
-      if (!price || !condition) {
+      if (price === undefined || !condition) {
         return res.status(StatusCodes.BAD_REQUEST).json({
           success: false,
-          message: "Second-hand books require price and condition",
+          message:
+            "Second-hand books require price and condition",
         });
       }
 
       if (!["new", "used-good", "used-ok"].includes(condition)) {
         return res.status(StatusCodes.BAD_REQUEST).json({
           success: false,
-          message: "Invalid condition",
+          message: "Invalid condition value",
         });
+      }
+    }
+
+    let visibility: "public" | "pending";
+
+    if (role === "admin") {
+      visibility = "public";
+    } else {
+      if (type === "free") {
+        visibility = "pending";
+      } else if (type === "physical") {
+        visibility = "public";
+      } else {
+        visibility = "pending";
       }
     }
 
     const book = await Book.create({
       type,
-      title,
-      author,
+      title: title.trim(),
+      author: author.trim(),
       category,
       genre,
       description,
@@ -105,29 +145,37 @@ export const uploadBookDetails = async (req: Request, res: Response) => {
       stock,
       condition,
       deliveryInfo,
+      rating,
       language,
       edition,
       negotiable,
       sellerName,
       phone,
       location,
-      uploader,
       printedPrice,
       bookType,
+      uploader,
+      visibility,
     });
 
     return res.status(StatusCodes.CREATED).json({
       success: true,
-      message: "Book uploaded successfully",
+      message:
+        visibility === "pending"
+          ? "Book uploaded and sent for approval"
+          : "Book uploaded successfully",
       book,
     });
-  } catch (error) {
+  } catch (error: any) {
+    console.error("UPLOAD BOOK ERROR:", error);
+
     return res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({
       success: false,
-      message: "Server error",
+      message: "Failed to upload book",
     });
   }
 };
+
 
 export const getAllBooks = async (req: Request, res: Response) => {
   try {
@@ -354,3 +402,4 @@ export const deleteBookDetails = async (req: Request, res: Response) => {
     });
   }
 };
+  
