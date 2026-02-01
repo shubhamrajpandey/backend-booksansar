@@ -21,6 +21,8 @@ export const authenticateToken = (
       message: "Unauthorized. No token provided.",
     });
   }
+
+  
   try {
     const decoded = jwt.verify(
       token,

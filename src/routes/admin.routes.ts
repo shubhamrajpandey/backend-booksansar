@@ -4,7 +4,8 @@ import { getAllUsers, deleteUser, updateVendorStatus, getAllCategories,
   addCategory,
   updateCategory,
   deleteCategory,
-  getActiveCategories, moderateFreeBook } from "../controllers/admin.controller";
+  getActiveCategories, moderateFreeBook, 
+  updateUserAccountStatus} from "../controllers/admin.controller";
 import { verifyRole } from "../middlewares/role.middleware";
 import { authenticateToken } from "../middlewares/auth.middleware";
 import { getPendingFreeBooks } from "../controllers/admin.controller";
@@ -22,6 +23,14 @@ router.patch(
   verifyRole("admin"),
   updateVendorStatus
 );
+
+router.patch(
+  "/users/:id/account-status",
+  authenticateToken,
+  verifyRole("admin"),
+  updateUserAccountStatus
+);
+
 
 router.get("/active", getActiveCategories);
 
