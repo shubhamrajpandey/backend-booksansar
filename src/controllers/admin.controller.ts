@@ -6,7 +6,6 @@ import sendEmail from "../services/mail.service";
 import Category from "../models/category.model";
 import Book from "../models/book.model";
 
-//get users(learner,vendor) by filtering
 export const getAllUsers = async (req: Request, res: Response) => {
   try {
     const user = await User.find();
@@ -14,6 +13,26 @@ export const getAllUsers = async (req: Request, res: Response) => {
 
     if (role) {
       const filteredUsers = user.filter((usr) => usr.role === role);
+
+      if (role === "vendor") {
+        const vendorsWithDetails = await Promise.all(
+          filteredUsers.map(async (vendor) => {
+            const vendorDetails = await Vendor.findOne({ userId: vendor._id });
+            return {
+              ...vendor.toObject(),
+              kycStatus: vendorDetails?.status || "not_submitted",
+              vendorDetailsId: vendorDetails?._id || null,
+            };
+          }),
+        );
+
+        return res.status(StatusCodes.OK).json({
+          success: true,
+          message: "Users fetched successfully",
+          data: vendorsWithDetails,
+        });
+      }
+
       return res.status(StatusCodes.OK).json({
         success: true,
         message: "Users fetched successfully",
@@ -34,6 +53,7 @@ export const getAllUsers = async (req: Request, res: Response) => {
           usr.name.toLowerCase().includes(search.toLowerCase()) ||
           usr.email.toLowerCase().includes(search.toLowerCase()),
       );
+
 
       return res.status(StatusCodes.OK).json({
         success: true,
@@ -62,7 +82,6 @@ export const getAllUsers = async (req: Request, res: Response) => {
   }
 };
 
-//suspend user
 export const deleteUser = async (req: Request, res: Response) => {
   try {
     const user = await User.findByIdAndDelete(req.params.id);
@@ -86,7 +105,6 @@ export const deleteUser = async (req: Request, res: Response) => {
   }
 };
 
-//approve vendor and send email notification
 export const updateVendorStatus = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
@@ -175,7 +193,6 @@ export const updateVendorStatus = async (req: Request, res: Response) => {
       `
   <div style="font-family:'Inter', Arial, sans-serif; max-width:600px; margin:auto; border:1px solid #e5e7eb; border-radius:12px; overflow:hidden; box-shadow:0 4px 12px rgba(0,0,0,0.08);">
 
-    <!-- Header -->
     <div style="background-color:#321874; color:#ffffff; text-align:center; padding:24px 0;">
       <h1 style="margin:0; font-size:28px; font-family:'Sedgwick Ave', cursive; letter-spacing:1px;">
         <span style="color:#ffffff;">Book</span><span style="color:#E68A00;">Sansar</span>
@@ -185,7 +202,6 @@ export const updateVendorStatus = async (req: Request, res: Response) => {
       </p>
     </div>
 
-    <!-- Body -->
     <div style="padding:32px 24px; color:#1f2937;">
       <h2 style="margin-bottom:12px; color:#321874; text-align:center;">
         ${heading}
@@ -203,7 +219,6 @@ export const updateVendorStatus = async (req: Request, res: Response) => {
 
     </div>
 
-    <!-- Footer -->
     <div style="background-color:#f9fafb; text-align:center; padding:16px; font-size:13px; color:#9ca3af;">
       &copy; 2025 <span style="color:#321874; font-weight:600;">BookSansar</span>. All rights reserved.
     </div>
@@ -227,13 +242,9 @@ export const updateVendorStatus = async (req: Request, res: Response) => {
   }
 };
 
-// Suspend or activate user account (vendor or learner)
-export const updateUserAccountStatus = async (
-  req: Request,
-  res: Response
-) => {
+export const updateUserAccountStatus = async (req: Request, res: Response) => {
   try {
-    const { id } = req.params; 
+    const { id } = req.params;
     const { status } = req.body;
 
     if (!["active", "suspended"].includes(status)) {
@@ -279,11 +290,10 @@ export const updateUserAccountStatus = async (
   }
 };
 
-// Get all categories
 export const getAllCategories = async (req: Request, res: Response) => {
   try {
     const categories = await Category.find().sort({ name: 1 });
-    
+
     return res.status(StatusCodes.OK).json({
       success: true,
       data: categories,
@@ -298,20 +308,19 @@ export const getAllCategories = async (req: Request, res: Response) => {
   }
 };
 
-// Get single category
 export const getCategoryById = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    
+
     const category = await Category.findById(id);
-    
+
     if (!category) {
       return res.status(StatusCodes.NOT_FOUND).json({
         success: false,
         message: "Category not found",
       });
     }
-    
+
     return res.status(StatusCodes.OK).json({
       success: true,
       data: category,
@@ -325,41 +334,40 @@ export const getCategoryById = async (req: Request, res: Response) => {
   }
 };
 
-// Add new category
 export const addCategory = async (req: Request, res: Response) => {
   try {
     const { name, description } = req.body;
-    
+
     if (!name || name.trim() === "") {
       return res.status(StatusCodes.BAD_REQUEST).json({
         success: false,
         message: "Category name is required",
       });
     }
-    
+
     const slug = name
       .toLowerCase()
       .trim()
       .replace(/[^\w\s-]/g, "")
       .replace(/\s+/g, "-");
-    
+
     const existingCategory = await Category.findOne({
       $or: [{ name: name.trim() }, { slug }],
     });
-    
+
     if (existingCategory) {
       return res.status(StatusCodes.CONFLICT).json({
         success: false,
         message: "Category already exists",
       });
     }
-    
+
     const category = await Category.create({
       name: name.trim(),
       slug,
       description: description?.trim(),
     });
-    
+
     return res.status(StatusCodes.CREATED).json({
       success: true,
       message: "Category created successfully",
@@ -374,54 +382,53 @@ export const addCategory = async (req: Request, res: Response) => {
   }
 };
 
-// Update category
 export const updateCategory = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
     const { name, description, isActive } = req.body;
-    
+
     const category = await Category.findById(id);
-    
+
     if (!category) {
       return res.status(StatusCodes.NOT_FOUND).json({
         success: false,
         message: "Category not found",
       });
     }
-    
+
     if (name && name.trim() !== category.name) {
       const slug = name
         .toLowerCase()
         .trim()
         .replace(/[^\w\s-]/g, "")
         .replace(/\s+/g, "-");
-      
+
       const existingCategory = await Category.findOne({
         _id: { $ne: id },
         $or: [{ name: name.trim() }, { slug }],
       });
-      
+
       if (existingCategory) {
         return res.status(StatusCodes.CONFLICT).json({
           success: false,
           message: "Category name already exists",
         });
       }
-      
+
       category.name = name.trim();
       category.slug = slug;
     }
-    
+
     if (description !== undefined) {
       category.description = description?.trim();
     }
-    
+
     if (isActive !== undefined) {
       category.isActive = isActive;
     }
-    
+
     await category.save();
-    
+
     return res.status(StatusCodes.OK).json({
       success: true,
       message: "Category updated successfully",
@@ -436,13 +443,12 @@ export const updateCategory = async (req: Request, res: Response) => {
   }
 };
 
-// Delete category
 export const deleteCategory = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    
+
     const category = await Category.findById(id);
-    
+
     if (!category) {
       return res.status(StatusCodes.NOT_FOUND).json({
         success: false,
@@ -451,16 +457,16 @@ export const deleteCategory = async (req: Request, res: Response) => {
     }
 
     const booksCount = await Book.countDocuments({ category: category.name });
-    
+
     if (booksCount > 0) {
       return res.status(StatusCodes.CONFLICT).json({
         success: false,
         message: `Cannot delete category. ${booksCount} book(s) are using this category`,
       });
     }
-    
+
     await Category.findByIdAndDelete(id);
-    
+
     return res.status(StatusCodes.OK).json({
       success: true,
       message: "Category deleted successfully",
@@ -474,11 +480,12 @@ export const deleteCategory = async (req: Request, res: Response) => {
   }
 };
 
-// Get active categories only (for public use)
 export const getActiveCategories = async (req: Request, res: Response) => {
   try {
-    const categories = await Category.find({ isActive: true }).sort({ name: 1 });
-    
+    const categories = await Category.find({ isActive: true }).sort({
+      name: 1,
+    });
+
     return res.status(StatusCodes.OK).json({
       success: true,
       data: categories,
@@ -492,10 +499,9 @@ export const getActiveCategories = async (req: Request, res: Response) => {
   }
 };
 
-//moderate free book submissions
 export const moderateFreeBook = async (req: Request, res: Response) => {
   const { id } = req.params;
-  const { action } = req.body; 
+  const { action } = req.body;
 
   if (!["approve", "reject"].includes(action)) {
     return res.status(StatusCodes.BAD_REQUEST).json({
@@ -540,10 +546,12 @@ export const moderateFreeBook = async (req: Request, res: Response) => {
   });
 };
 
-//get all pending books of type free
 export const getPendingFreeBooks = async (req: Request, res: Response) => {
   try {
-    const pendingBooks = await Book.find({ type: "free", visibility: "pending" });
+    const pendingBooks = await Book.find({
+      type: "free",
+      visibility: "pending",
+    });
 
     return res.status(StatusCodes.OK).json({
       success: true,
