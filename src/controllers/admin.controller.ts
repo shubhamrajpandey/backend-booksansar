@@ -227,6 +227,58 @@ export const updateVendorStatus = async (req: Request, res: Response) => {
   }
 };
 
+// Suspend or activate user account (vendor or learner)
+export const updateUserAccountStatus = async (
+  req: Request,
+  res: Response
+) => {
+  try {
+    const { id } = req.params; 
+    const { status } = req.body;
+
+    if (!["active", "suspended"].includes(status)) {
+      return res.status(StatusCodes.BAD_REQUEST).json({
+        success: false,
+        message: "Invalid account status",
+      });
+    }
+
+    const user = await User.findById(id);
+
+    if (!user) {
+      return res.status(StatusCodes.NOT_FOUND).json({
+        success: false,
+        message: "User not found",
+      });
+    }
+
+    if (user.accountStatus === status) {
+      return res.status(StatusCodes.BAD_REQUEST).json({
+        success: false,
+        message: `User is already ${status}`,
+      });
+    }
+
+    user.accountStatus = status;
+    await user.save();
+
+    return res.status(StatusCodes.OK).json({
+      success: true,
+      message: `User account ${status} successfully`,
+      data: {
+        id: user._id,
+        status: user.accountStatus,
+      },
+    });
+  } catch (error) {
+    console.error("Update account status error:", error);
+    return res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({
+      success: false,
+      message: "Server error",
+    });
+  }
+};
+
 // Get all categories
 export const getAllCategories = async (req: Request, res: Response) => {
   try {
