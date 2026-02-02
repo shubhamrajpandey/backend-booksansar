@@ -5,7 +5,8 @@ import { getAllUsers, deleteUser, updateVendorStatus, getAllCategories,
   updateCategory,
   deleteCategory,
   getActiveCategories, moderateFreeBook, 
-  updateUserAccountStatus} from "../controllers/admin.controller";
+  updateUserAccountStatus,
+  getVendorDetails} from "../controllers/admin.controller";
 import { verifyRole } from "../middlewares/role.middleware";
 import { authenticateToken } from "../middlewares/auth.middleware";
 import { getPendingFreeBooks } from "../controllers/admin.controller";
@@ -16,6 +17,8 @@ const router = Router();
 //get all users and filter by role or search
 router.get("/users", authenticateToken, verifyRole("admin"), getAllUsers);
 router.delete("/users/:id", authenticateToken, verifyRole("admin"), deleteUser);
+
+router.get("/vendors/:id/details", authenticateToken, verifyRole("admin"), getVendorDetails);
 
 router.patch(
   "/vendors/:id/status",

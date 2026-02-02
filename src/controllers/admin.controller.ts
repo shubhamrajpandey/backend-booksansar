@@ -242,6 +242,32 @@ export const updateVendorStatus = async (req: Request, res: Response) => {
   }
 };
 
+//get add detail of vendor before approval
+export const getVendorDetails = async ( req: Request, res: Response) =>{
+  try {
+    const { id } = req.params;
+    const vendor = await Vendor.find({userId: id});
+    if (!vendor) {
+      return res.status(StatusCodes.NOT_FOUND).json({
+        success: false,
+        message: "Vendor not found",
+      });
+    }
+    
+    return res.status(StatusCodes.OK).json({
+      success: true,
+      message: "Vendor details fetched successfully",
+      data: vendor,
+    });
+  } catch (error) {
+    console.error("Error fetching vendor details:", error);
+    return res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({
+      success: false,
+      message: "Server error",
+    });
+  }
+}
+
 export const updateUserAccountStatus = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
