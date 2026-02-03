@@ -5,6 +5,8 @@ import Vendor from "../models/vendor.model";
 import sendEmail from "../services/mail.service";
 import Category from "../models/category.model";
 import Book from "../models/book.model";
+import mongoose from "mongoose";
+import { getLastBackupTime } from "../utils/platform.utils";
 
 export const getAllUsers = async (req: Request, res: Response) => {
   try {
@@ -53,7 +55,6 @@ export const getAllUsers = async (req: Request, res: Response) => {
           usr.name.toLowerCase().includes(search.toLowerCase()) ||
           usr.email.toLowerCase().includes(search.toLowerCase()),
       );
-
 
       return res.status(StatusCodes.OK).json({
         success: true,
@@ -243,17 +244,17 @@ export const updateVendorStatus = async (req: Request, res: Response) => {
 };
 
 //get add detail of vendor before approval
-export const getVendorDetails = async ( req: Request, res: Response) =>{
+export const getVendorDetails = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    const vendor = await Vendor.find({userId: id});
+    const vendor = await Vendor.find({ userId: id });
     if (!vendor) {
       return res.status(StatusCodes.NOT_FOUND).json({
         success: false,
         message: "Vendor not found",
       });
     }
-    
+
     return res.status(StatusCodes.OK).json({
       success: true,
       message: "Vendor details fetched successfully",
@@ -266,7 +267,7 @@ export const getVendorDetails = async ( req: Request, res: Response) =>{
       message: "Server error",
     });
   }
-}
+};
 
 export const updateUserAccountStatus = async (req: Request, res: Response) => {
   try {
@@ -585,6 +586,191 @@ export const getPendingFreeBooks = async (req: Request, res: Response) => {
       data: pendingBooks,
     });
   } catch (error) {
+    return res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({
+      success: false,
+      message: "Server error",
+    });
+  }
+};
+
+export const getAdminProfile = async (req: Request, res: Response) => {
+  try {
+    const adminId = req.user?.id;
+
+    const admin = await User.findById(adminId).select("-password");
+
+    if (!admin) {
+      return res.status(StatusCodes.NOT_FOUND).json({
+        success: false,
+        message: "Admin not found",
+      });
+    }
+
+    if (admin.role !== "admin") {
+      return res.status(StatusCodes.FORBIDDEN).json({
+        success: false,
+        message: "Access denied. Admin role required",
+      });
+    }
+
+    return res.status(StatusCodes.OK).json({
+      success: true,
+      message: "Admin profile fetched successfully",
+      data: admin,
+    });
+  } catch (error) {
+    console.error("Error fetching admin profile:", error);
+    return res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({
+      success: false,
+      message: "Server error",
+    });
+  }
+};
+
+export const updateAdminProfile = async (req: Request, res: Response) => {
+  try {
+    const adminId = req.user?.id;
+    const { name, email, phoneNumber } = req.body;
+
+    const admin = await User.findById(adminId);
+
+    if (!admin) {
+      return res.status(StatusCodes.NOT_FOUND).json({
+        success: false,
+        message: "Admin not found",
+      });
+    }
+
+    if (admin.role !== "admin") {
+      return res.status(StatusCodes.FORBIDDEN).json({
+        success: false,
+        message: "Access denied. Admin role required",
+      });
+    }
+
+    if (email && email !== admin.email) {
+      const existingUser = await User.findOne({ email });
+      if (existingUser) {
+        return res.status(StatusCodes.CONFLICT).json({
+          success: false,
+          message: "Email already in use",
+        });
+      }
+      admin.email = email;
+    }
+
+    if (name) admin.name = name;
+    if (phoneNumber !== undefined) admin.phoneNumber = phoneNumber;
+
+    await admin.save();
+
+    const { password, ...updatedAdmin } = admin.toObject();
+
+    return res.status(StatusCodes.OK).json({
+      success: true,
+      message: "Admin profile updated successfully",
+      data: updatedAdmin,
+    });
+  } catch (error) {
+    console.error("Error updating admin profile:", error);
+    return res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({
+      success: false,
+      message: "Server error",
+    });
+  }
+};
+
+export const updateAdminPassword = async (req: Request, res: Response) => {
+  try {
+    const adminId = req.user?.id;
+    const { currentPassword, newPassword } = req.body;
+
+    if (!currentPassword || !newPassword) {
+      return res.status(StatusCodes.BAD_REQUEST).json({
+        success: false,
+        message: "Current password and new password are required",
+      });
+    }
+
+    if (newPassword.length < 6) {
+      return res.status(StatusCodes.BAD_REQUEST).json({
+        success: false,
+        message: "New password must be at least 6 characters long",
+      });
+    }
+
+    const admin = await User.findById(adminId);
+
+    if (!admin) {
+      return res.status(StatusCodes.NOT_FOUND).json({
+        success: false,
+        message: "Admin not found",
+      });
+    }
+
+    if (admin.role !== "admin") {
+      return res.status(StatusCodes.FORBIDDEN).json({
+        success: false,
+        message: "Access denied. Admin role required",
+      });
+    }
+
+    // Verify current password (you'll need bcrypt for this)
+    const bcrypt = require("bcrypt");
+    const isPasswordValid = await bcrypt.compare(
+      currentPassword,
+      admin.password,
+    );
+
+    if (!isPasswordValid) {
+      return res.status(StatusCodes.UNAUTHORIZED).json({
+        success: false,
+        message: "Current password is incorrect",
+      });
+    }
+
+    // Hash new password
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+    admin.password = hashedPassword;
+    await admin.save();
+
+    return res.status(StatusCodes.OK).json({
+      success: true,
+      message: "Password updated successfully",
+    });
+  } catch (error) {
+    console.error("Error updating admin password:", error);
+    return res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({
+      success: false,
+      message: "Server error",
+    });
+  }
+};
+
+
+export const getPlatformStats = async (req: Request, res: Response) => {
+  try {
+    const dbStatus = mongoose.connection.readyState === 1 ? "Connected" : "Disconnected";
+    const platformVersion = process.env.PLATFORM_VERSION || "1.0.0";
+
+    const uptimeSeconds = process.uptime();
+    const uptimePercentage = "99.8%"; 
+
+    const lastBackup = await getLastBackupTime(); 
+
+    return res.status(StatusCodes.OK).json({
+      success: true,
+      message: "Platform stats fetched successfully",
+      data: {
+        platformVersion,
+        databaseStatus: dbStatus,
+        lastBackup,
+        uptime: uptimePercentage,
+        uptimeSeconds,
+      },
+    });
+  } catch (error) {
+    console.error("Error fetching platform stats:", error);
     return res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({
       success: false,
       message: "Server error",

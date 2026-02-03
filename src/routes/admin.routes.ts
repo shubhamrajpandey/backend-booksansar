@@ -6,7 +6,11 @@ import { getAllUsers, deleteUser, updateVendorStatus, getAllCategories,
   deleteCategory,
   getActiveCategories, moderateFreeBook, 
   updateUserAccountStatus,
-  getVendorDetails} from "../controllers/admin.controller";
+  getVendorDetails,
+  updateAdminPassword,
+  getAdminProfile,
+  updateAdminProfile,
+  getPlatformStats} from "../controllers/admin.controller";
 import { verifyRole } from "../middlewares/role.middleware";
 import { authenticateToken } from "../middlewares/auth.middleware";
 import { getPendingFreeBooks } from "../controllers/admin.controller";
@@ -34,6 +38,12 @@ router.patch(
   updateUserAccountStatus
 );
 
+// Admin profile routes
+router.get("/profile", authenticateToken, verifyRole("admin"), getAdminProfile);
+router.put("/profile", authenticateToken, verifyRole("admin"), updateAdminProfile);
+router.put("/password", authenticateToken, verifyRole("admin"), updateAdminPassword);
+
+router.get("/platform/stats", authenticateToken, verifyRole("admin"), getPlatformStats);
 
 router.get("/active", getActiveCategories);
 
