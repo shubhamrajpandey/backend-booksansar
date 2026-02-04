@@ -10,11 +10,16 @@ import { getAllUsers, deleteUser, updateVendorStatus, getAllCategories,
   updateAdminPassword,
   getAdminProfile,
   updateAdminProfile,
-  getPlatformStats} from "../controllers/admin.controller";
+  getPlatformStats,
+  getGenres,
+  addGenre,
+  updateGenre,
+  deleteGenre
+} from "../controllers/admin.controller";
 import { verifyRole } from "../middlewares/role.middleware";
 import { authenticateToken } from "../middlewares/auth.middleware";
 import { getPendingFreeBooks } from "../controllers/admin.controller";
-import { get } from "http";
+
 
 const router = Router();
 
@@ -47,11 +52,16 @@ router.get("/platform/stats", authenticateToken, verifyRole("admin"), getPlatfor
 
 router.get("/active", getActiveCategories);
 
-router.get("/", getAllCategories);
-router.get("/:id", getCategoryById);
-router.post("/", addCategory);
-router.put("/:id", updateCategory);
-router.delete("/:id", deleteCategory);
+router.get("/categories", getAllCategories);
+router.get("/categories/:id", getCategoryById);
+router.post("/categories", authenticateToken, verifyRole("admin"), addCategory);
+router.put("/categories/:id", authenticateToken, verifyRole("admin"), updateCategory);
+router.delete("/categories/:id", authenticateToken, verifyRole("admin"), deleteCategory);
+
+router.get("/genres", getGenres);
+router.post("/genres", authenticateToken, verifyRole("admin"), addGenre);
+router.put("/genres/:id", authenticateToken, verifyRole("admin"), updateGenre);
+router.delete("/genres/:id", authenticateToken, verifyRole("admin"), deleteGenre);
 
 router.patch(
   "/books/:id/moderate",
