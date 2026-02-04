@@ -526,6 +526,7 @@ export const getActiveCategories = async (req: Request, res: Response) => {
   }
 };
 
+//moderate free book and second-hand for admin approval
 export const moderateFreeBook = async (req: Request, res: Response) => {
   const { id } = req.params;
   const { action } = req.body;
@@ -546,7 +547,7 @@ export const moderateFreeBook = async (req: Request, res: Response) => {
     });
   }
 
-  if (book.type !== "free") {
+  if (book.type !== "free" && book.type !== "second-hand") {
     return res.status(StatusCodes.BAD_REQUEST).json({
       success: false,
       message: "Only free books require admin approval",
@@ -573,10 +574,11 @@ export const moderateFreeBook = async (req: Request, res: Response) => {
   });
 };
 
+//get pending free books for admin approval
 export const getPendingFreeBooks = async (req: Request, res: Response) => {
   try {
     const pendingBooks = await Book.find({
-      type: "free",
+      $or: [{ type: "free" }, { type: "second-hand" }],
       visibility: "pending",
     });
 
@@ -592,6 +594,27 @@ export const getPendingFreeBooks = async (req: Request, res: Response) => {
     });
   }
 };
+
+// //get pending second-hand books for admin approval
+// export const getPendingSecondHandBooks = async (req: Request, res: Response) => {
+//   try {
+//     const pendingBooks = await Book.find({
+//       type: "second-hand",
+//       visibility: "pending",
+//     });
+
+//     return res.status(StatusCodes.OK).json({
+//       success: true,
+//       message: "Pending second-hand books fetched successfully",
+//       data: pendingBooks,
+//     });
+//   } catch (error) {
+//     return res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({
+//       success: false,
+//       message: "Server error",
+//     });
+//   }
+// }
 
 export const getAdminProfile = async (req: Request, res: Response) => {
   try {
