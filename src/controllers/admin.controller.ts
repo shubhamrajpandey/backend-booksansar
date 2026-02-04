@@ -7,7 +7,9 @@ import Category from "../models/category.model";
 import Book from "../models/book.model";
 import mongoose from "mongoose";
 import { getLastBackupTime } from "../utils/platform.utils";
+import Genre from "../models/genre.model";
 
+// Users
 export const getAllUsers = async (req: Request, res: Response) => {
   try {
     const user = await User.find();
@@ -269,6 +271,7 @@ export const getVendorDetails = async (req: Request, res: Response) => {
   }
 };
 
+//update user account status (active/suspended)
 export const updateUserAccountStatus = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
@@ -317,14 +320,58 @@ export const updateUserAccountStatus = async (req: Request, res: Response) => {
   }
 };
 
+// Categories
 export const getAllCategories = async (req: Request, res: Response) => {
   try {
-    const categories = await Category.find().sort({ name: 1 });
+    const page = Number(req.query.page) || 1;
+    const limit = Number(req.query.limit) || 8;
+
+    const safePage = page < 1 ? 1 : page;
+    const safeLimit = limit < 1 ? 8 : limit > 50 ? 50 : limit;
+    const skip = (safePage - 1) * safeLimit;
+
+    const totalCategories = await Category.countDocuments();
+
+    const categories = await Category.find()
+      .sort({ name: 1 })
+      .skip(skip)
+      .limit(safeLimit);
+
+    const bookCounts = await Book.aggregate([
+      { 
+        $match: { 
+          visibility: "public" 
+        } 
+      },
+      { 
+        $group: { 
+          _id: "$category", 
+          count: { $sum: 1 } 
+        } 
+      }
+    ]);
+
+    const countMap = new Map(
+      bookCounts.map(item => [item._id, item.count])
+    );
+
+    const categoriesWithCounts = categories.map(category => ({
+      _id: category._id,
+      name: category.name,
+      isActive: category.isActive,
+      bookCount: countMap.get(category.name) || 0,
+      createdAt: category.createdAt,
+      updatedAt: category.updatedAt,
+    }));
 
     return res.status(StatusCodes.OK).json({
       success: true,
-      data: categories,
-      count: categories.length,
+      data: categoriesWithCounts,
+      count: categoriesWithCounts.length,
+      page: safePage,
+      limit: safeLimit,
+      total: totalCategories,
+      totalPages: Math.ceil(totalCategories / safeLimit),
     });
   } catch (error) {
     console.error("Error fetching categories:", error);
@@ -348,9 +395,21 @@ export const getCategoryById = async (req: Request, res: Response) => {
       });
     }
 
+    const bookCount = await Book.countDocuments({ 
+      category: category.name,
+      visibility: "public"
+    });
+
     return res.status(StatusCodes.OK).json({
       success: true,
-      data: category,
+      data: {
+        _id: category._id,
+        name: category.name,
+        isActive: category.isActive,
+        bookCount,
+        createdAt: category.createdAt,
+        updatedAt: category.updatedAt,
+      },
     });
   } catch (error) {
     console.error("Error fetching category:", error);
@@ -398,7 +457,14 @@ export const addCategory = async (req: Request, res: Response) => {
     return res.status(StatusCodes.CREATED).json({
       success: true,
       message: "Category created successfully",
-      data: category,
+      data: {
+        _id: category._id,
+        name: category.name,
+        isActive: category.isActive,
+        bookCount: 0,
+        createdAt: category.createdAt,
+        updatedAt: category.updatedAt,
+      },
     });
   } catch (error) {
     console.error("Error creating category:", error);
@@ -412,7 +478,7 @@ export const addCategory = async (req: Request, res: Response) => {
 export const updateCategory = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    const { name, description, isActive } = req.body;
+    const { name, isActive } = req.body;
 
     const category = await Category.findById(id);
 
@@ -422,44 +488,54 @@ export const updateCategory = async (req: Request, res: Response) => {
         message: "Category not found",
       });
     }
+    
+    const oldName = category.name;
 
     if (name && name.trim() !== category.name) {
-      const slug = name
-        .toLowerCase()
-        .trim()
-        .replace(/[^\w\s-]/g, "")
-        .replace(/\s+/g, "-");
-
       const existingCategory = await Category.findOne({
+        name: name.trim(),
         _id: { $ne: id },
-        $or: [{ name: name.trim() }, { slug }],
       });
 
       if (existingCategory) {
         return res.status(StatusCodes.CONFLICT).json({
           success: false,
-          message: "Category name already exists",
+          message: "Another category with this name already exists",
         });
       }
 
       category.name = name.trim();
-      category.slug = slug;
     }
-
-    if (description !== undefined) {
-      category.description = description?.trim();
-    }
-
+    
     if (isActive !== undefined) {
       category.isActive = isActive;
     }
 
     await category.save();
 
+    if (oldName !== category.name) {
+      await Book.updateMany(
+        { category: oldName },
+        { $set: { category: category.name } }
+      );
+    }
+
+    const bookCount = await Book.countDocuments({ 
+      category: category.name,
+      visibility: "public"
+    });
+
     return res.status(StatusCodes.OK).json({
       success: true,
       message: "Category updated successfully",
-      data: category,
+      data: {
+        _id: category._id,
+        name: category.name,
+        isActive: category.isActive,
+        bookCount,
+        createdAt: category.createdAt,
+        updatedAt: category.updatedAt,
+      },
     });
   } catch (error) {
     console.error("Error updating category:", error);
@@ -507,6 +583,224 @@ export const deleteCategory = async (req: Request, res: Response) => {
   }
 };
 
+// Genres
+export const getGenres = async (req: Request, res: Response) => {
+  try {
+    const page = Number(req.query.page) || 1;
+    const limit = Number(req.query.limit) || 8;
+
+    const safePage = page < 1 ? 1 : page;
+    const safeLimit = limit < 1 ? 8 : limit > 50 ? 50 : limit;
+    const skip = (safePage - 1) * safeLimit;
+
+
+    const totalGenres = await Genre.countDocuments();
+
+    const genres = await Genre.find()
+      .sort({ name: 1 })
+      .skip(skip)
+      .limit(safeLimit);
+
+    const bookCounts = await Book.aggregate([
+      { 
+        $match: { 
+          visibility: "public",
+          genre: { $exists: true, $ne: null } 
+        } 
+      },
+      { 
+        $group: { 
+          _id: "$genre", 
+          count: { $sum: 1 } 
+        } 
+      }
+    ]);
+
+    const countMap = new Map(
+      bookCounts.map(item => [item._id, item.count])
+    );
+
+    const genresWithCounts = genres.map(genre => ({
+      _id: genre._id,
+      name: genre.name,
+      isActive: genre.isActive,
+      bookCount: countMap.get(genre.name) || 0,
+      createdAt: genre.createdAt,
+      updatedAt: genre.updatedAt,
+    }));
+
+    return res.status(StatusCodes.OK).json({
+      success: true,
+      data: genresWithCounts,
+      count: genresWithCounts.length,
+      page: safePage,
+      limit: safeLimit,
+      total: totalGenres,
+      totalPages: Math.ceil(totalGenres / safeLimit),
+    });
+  } catch (error) {
+    console.error("Error fetching genres:", error);
+    return res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({
+      success: false,
+      message: "Server error",
+    });
+  }
+};
+
+export const addGenre = async (req: Request, res: Response) => {
+  try {
+    const { name } = req.body;
+
+    if (!name || name.trim() === "") {
+      return res.status(StatusCodes.BAD_REQUEST).json({
+        success: false,
+        message: "Genre name is required",
+      });
+    }
+
+    const existingGenre = await Genre.findOne({ name: name.trim() });
+
+    if (existingGenre) {
+      return res.status(StatusCodes.CONFLICT).json({
+        success: false,
+        message: "Genre already exists",
+      });
+    }
+
+    const genre = await Genre.create({ name: name.trim() });
+
+    return res.status(StatusCodes.CREATED).json({
+      success: true,
+      message: "Genre created successfully",
+      data: {
+        _id: genre._id,
+        name: genre.name,
+        isActive: genre.isActive,
+        bookCount: 0,
+        createdAt: genre.createdAt,
+        updatedAt: genre.updatedAt,
+      },
+    });
+  } catch (error) {
+    console.error("Error creating genre:", error);
+    return res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({
+      success: false,
+      message: "Server error",
+    });
+  }
+};
+
+export const deleteGenre = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+
+    const genre = await Genre.findById(id);
+
+    if (!genre) {
+      return res.status(StatusCodes.NOT_FOUND).json({
+        success: false,
+        message: "Genre not found",
+      });
+    }
+
+    const booksCount = await Book.countDocuments({ genre: genre.name });
+
+    if (booksCount > 0) {
+      return res.status(StatusCodes.CONFLICT).json({
+        success: false,
+        message: `Cannot delete genre. ${booksCount} book(s) are using this genre`,
+      });
+    }
+
+    await Genre.findByIdAndDelete(id);
+
+    return res.status(StatusCodes.OK).json({
+      success: true,
+      message: "Genre deleted successfully",
+    });
+  } catch (error) {
+    console.error("Error deleting genre:", error);
+    return res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({
+      success: false,
+      message: "Server error",
+    });
+  }
+};
+
+export const updateGenre = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { name, isActive } = req.body;
+
+    const genre = await Genre.findById(id);
+
+    if (!genre) {
+      return res.status(StatusCodes.NOT_FOUND).json({
+        success: false,
+        message: "Genre not found",
+      });
+    }
+    
+    const oldName = genre.name;
+    
+    if (name && name.trim() !== genre.name) {
+      const existingGenre = await Genre.findOne({
+        name: name.trim(),
+        _id: { $ne: id },
+      });
+
+      if (existingGenre) {
+        return res.status(StatusCodes.CONFLICT).json({
+          success: false,
+          message: "Another genre with this name already exists",
+        });
+      }
+
+      genre.name = name.trim();
+    }
+
+    if (isActive !== undefined) {
+      genre.isActive = isActive;
+    }
+
+    await genre.save();
+
+    // Update genre name in all books if name changed
+    if (oldName !== genre.name) {
+      await Book.updateMany(
+        { genre: oldName },
+        { $set: { genre: genre.name } }
+      );
+    }
+
+    // Get book count
+    const bookCount = await Book.countDocuments({ 
+      genre: genre.name,
+      visibility: "public"
+    });
+
+    return res.status(StatusCodes.OK).json({
+      success: true,
+      message: "Genre updated successfully",
+      data: {
+        _id: genre._id,
+        name: genre.name,
+        isActive: genre.isActive,
+        bookCount,
+        createdAt: genre.createdAt,
+        updatedAt: genre.updatedAt,
+      },
+    });
+  } catch (error) {
+    console.error("Error updating genre:", error);
+    return res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({
+      success: false,
+      message: "Server error",
+    });
+  }
+};
+
+//get active categories for book addition
 export const getActiveCategories = async (req: Request, res: Response) => {
   try {
     const categories = await Category.find({ isActive: true }).sort({
@@ -616,6 +910,7 @@ export const getPendingFreeBooks = async (req: Request, res: Response) => {
 //   }
 // }
 
+// Admin Profile
 export const getAdminProfile = async (req: Request, res: Response) => {
   try {
     const adminId = req.user?.id;
@@ -650,6 +945,7 @@ export const getAdminProfile = async (req: Request, res: Response) => {
   }
 };
 
+// Update admin profile
 export const updateAdminProfile = async (req: Request, res: Response) => {
   try {
     const adminId = req.user?.id;
@@ -703,6 +999,7 @@ export const updateAdminProfile = async (req: Request, res: Response) => {
   }
 };
 
+// Update admin password
 export const updateAdminPassword = async (req: Request, res: Response) => {
   try {
     const adminId = req.user?.id;
@@ -770,7 +1067,7 @@ export const updateAdminPassword = async (req: Request, res: Response) => {
   }
 };
 
-
+// Platform Stats
 export const getPlatformStats = async (req: Request, res: Response) => {
   try {
     const dbStatus = mongoose.connection.readyState === 1 ? "Connected" : "Disconnected";
