@@ -2,7 +2,7 @@ import { StatusCodes } from "http-status-codes";
 import { Request, Response } from "express";
 import Book from "../models/book.model";
 
-
+//upload book details
 export const uploadBookDetails = async (req: Request, res: Response) => {
   try {
     if (!req.user) {
@@ -176,7 +176,7 @@ export const uploadBookDetails = async (req: Request, res: Response) => {
   }
 };
 
-
+//get all books with filters
 export const getAllBooks = async (req: Request, res: Response) => {
   try {
     const {
@@ -201,9 +201,14 @@ export const getAllBooks = async (req: Request, res: Response) => {
     } else {
       filter.visibility = "public";
     }
-
+    
     if (type && typeof type === "string") {
-      filter.type = type;
+      const types = type.split(",").map(t => t.trim());
+      if (types.length > 1) {
+        filter.type = { $in: types };
+      } else {
+        filter.type = type;
+      }
     }
 
     if (availability === "in-stock") {
@@ -274,6 +279,7 @@ export const getAllBooks = async (req: Request, res: Response) => {
   }
 };
 
+//get single book details
 export const getSingleBook = async (req: Request, res: Response) => {
   try {
     const filter: any = { _id: req.params.id };
@@ -307,6 +313,7 @@ export const getSingleBook = async (req: Request, res: Response) => {
   }
 };
 
+//update book details
 export const updateBookDetails = async (req: Request, res: Response) => {
   try {
     const allowedFields = [
@@ -368,6 +375,7 @@ export const updateBookDetails = async (req: Request, res: Response) => {
   }
 };
 
+//delete book details
 export const deleteBookDetails = async (req: Request, res: Response) => {
   try {
     const book = await Book.findById(req.params.id);
