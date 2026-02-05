@@ -13,6 +13,7 @@ import { initSocket } from "./services/socket.service";
 import adminRoute from "./routes/admin.routes";
 import accountRoute from "./routes/account.route";
 import cartRoute from "./routes/cart.route";
+import wishlistRoute from "./routes/wishlist.route";
 
 const app = express();
 
@@ -42,6 +43,8 @@ app.use("/api/chat", chatRoute);
 app.use("/api/admin", adminRoute);
 app.use("/api/account", accountRoute);
 app.use("/api/cart", cartRoute);
+app.use("/api/wishlist", wishlistRoute);
+
 
 server.listen(PORT, () =>
   console.log(`Server running on port http://localhost:${PORT}`),
