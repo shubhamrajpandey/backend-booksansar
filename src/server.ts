@@ -11,6 +11,7 @@ import bookRoute from "./routes/books.routes";
 import http from "http";
 import { initSocket } from "./services/socket.service";
 import adminRoute from "./routes/admin.routes";
+import accountRoute from "./routes/account.route";
 
 const app = express();
 
@@ -38,6 +39,7 @@ app.use("/api/upload", uploadRoute);
 app.use("/api/books", bookRoute);
 app.use("/api/chat", chatRoute);
 app.use("/api/admin", adminRoute);
+app.use("/api/account", accountRoute);
 
 
 server.listen(PORT, () =>
