@@ -10,9 +10,9 @@ import {
   deleteAccount,
 } from "../controllers/account.controller";
 import { authenticateToken } from "../middlewares/auth.middleware";
+import { verifyRole } from "../middlewares/role.middleware";
 
 const router = express.Router();
-
 
 router.use(authenticateToken);
 
@@ -20,16 +20,15 @@ router.use(authenticateToken);
 router.route("/profile").get(getProfile).put(updateProfile);
 
 
-router.get("/stats", getReadingStats);
-router.post("/stats/streak", updateStreak);
+router.get("/stats", verifyRole("learner"), getReadingStats);
+router.post("/stats/streak", verifyRole("learner"), updateStreak);
 
 
-router.get("/orders", getOrders);
-
+router.get("/orders", verifyRole("learner"), getOrders);
 
 router.route("/preferences").get(getPreferences).put(updatePreferences);
 
 
-router.delete("/", deleteAccount);
+router.delete("/", verifyRole("learner"), deleteAccount);
 
 export default router;
