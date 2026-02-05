@@ -6,8 +6,12 @@ export interface IUser extends Document {
   password: string;
   role: "learner" | "vendor" | "admin";
   phoneNumber?: string;
-
+  location?: string;
+  bio?: string;
+  avatar?: string;
   accountStatus: "active" | "suspended";
+  createdAt: Date;
+  updatedAt: Date;
 }
 
 const userSchema: Schema<IUser> = new Schema(
@@ -31,6 +35,22 @@ const userSchema: Schema<IUser> = new Schema(
       required: function (this: IUser) {
         return this.role === "vendor";
       },
+    },
+
+    location: {
+      type: String,
+      default: "",
+    },
+
+    bio: {
+      type: String,
+      maxlength: 500,
+      default: "",
+    },
+
+    avatar: {
+      type: String,
+      default: "",
     },
 
     accountStatus: {
