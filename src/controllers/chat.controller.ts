@@ -1,12 +1,14 @@
 import { Request, Response } from "express";
 import Conversation from "../models/conversation.model";
 import Message from "../models/message.model";
+import Book from "../models/book.model";
+import User from "../models/user.model";
 import { StatusCodes } from "http-status-codes";
 
 export const createOrGetConversation = async (req: Request, res: Response) => {
   try {
     const userId = req.user?.id;
-    const { receiverId } = req.body;
+    const { bookId } = req.body;
 
     if (!userId) {
       return res.status(StatusCodes.UNAUTHORIZED).json({
@@ -14,25 +16,64 @@ export const createOrGetConversation = async (req: Request, res: Response) => {
       });
     }
 
-    if (!receiverId) {
+    if (!bookId) {
       return res.status(StatusCodes.BAD_REQUEST).json({
-        message: "receiverId is required",
+        message: "bookId is required",
+      });
+    }
+
+    const book = await Book.findById(bookId);
+
+    if (!book) {
+      return res.status(StatusCodes.NOT_FOUND).json({
+        message: "Book not found",
+      });
+    }
+
+    if (!["second-hand", "physical"].includes(book.type)) {
+      return res.status(StatusCodes.BAD_REQUEST).json({
+        message: "Chat is only available for second-hand and physical books",
+      });
+    }
+
+    const sellerId = book.vendorId || book.uploader;
+
+    if (!sellerId) {
+      return res.status(StatusCodes.BAD_REQUEST).json({
+        message: "Book has no associated seller",
+      });
+    }
+
+    if (sellerId.toString() === userId) {
+      return res.status(StatusCodes.BAD_REQUEST).json({
+        message: "You cannot chat with yourself",
+      });
+    }
+
+    const seller = await User.findById(sellerId);
+
+    if (!seller) {
+      return res.status(StatusCodes.NOT_FOUND).json({
+        message: "Seller not found",
       });
     }
 
     let conversation = await Conversation.findOne({
-      participants: { $all: [userId, receiverId] },
-    }).populate("participants", "name email role");
+      participants: { $all: [userId, sellerId] },
+      bookId: bookId,
+    })
+      .populate("participants", "name email role")
+      .populate("bookId", "title type coverImage price");
 
     if (!conversation) {
       conversation = await Conversation.create({
-        participants: [userId, receiverId],
+        participants: [userId, sellerId],
+        bookId: bookId,
       });
 
-      conversation = (await Conversation.findById(conversation._id).populate(
-        "participants",
-        "name email role",
-      )) as any;
+      conversation = (await Conversation.findById(conversation._id)
+        .populate("participants", "name email role")
+        .populate("bookId", "title type coverImage price")) as any;
     }
 
     res.status(StatusCodes.OK).json(conversation);
@@ -59,6 +100,7 @@ export const getUserConversations = async (req: Request, res: Response) => {
       participants: userId,
     })
       .populate("participants", "name email role")
+      .populate("bookId", "title type coverImage price")
       .sort({ updatedAt: -1 });
 
     res.status(StatusCodes.OK).json(conversations);
@@ -72,11 +114,41 @@ export const getUserConversations = async (req: Request, res: Response) => {
 
 export const getMessages = async (req: Request, res: Response) => {
   try {
+    const userId = req.user?.id;
     const { conversationId } = req.params;
+
+    if (!userId) {
+      return res.status(StatusCodes.UNAUTHORIZED).json({
+        message: "User not authenticated",
+      });
+    }
+
+    const conversation = await Conversation.findById(conversationId);
+
+    if (!conversation) {
+      return res.status(StatusCodes.NOT_FOUND).json({
+        message: "Conversation not found",
+      });
+    }
+
+    if (!conversation.participants.includes(userId as any)) {
+      return res.status(StatusCodes.FORBIDDEN).json({
+        message: "You are not a participant in this conversation",
+      });
+    }
 
     const messages = await Message.find({ conversationId }).sort({
       createdAt: 1,
     });
+
+    await Message.updateMany(
+      {
+        conversationId,
+        receiverId: userId,
+        isRead: false,
+      },
+      { isRead: true },
+    );
 
     res.status(StatusCodes.OK).json(messages);
   } catch (error) {

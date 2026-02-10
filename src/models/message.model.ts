@@ -20,9 +20,16 @@ const messageSchema = new Schema(
     text: {
       type: String,
       required: true,
+      trim: true,
+    },
+    isRead: {
+      type: Boolean,
+      default: false,
     },
   },
   { timestamps: true },
 );
+
+messageSchema.index({ conversationId: 1, createdAt: 1 });
 
 export default model("Message", messageSchema);

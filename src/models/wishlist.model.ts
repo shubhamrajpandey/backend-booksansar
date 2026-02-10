@@ -27,13 +27,13 @@ const wishlistItemSchema = new Schema(
   { _id: false }
 );
 
-const wishlistSchema: Schema<IWishlist> = new Schema(
+const wishlistSchema = new Schema<IWishlist>(
   {
     userId: {
       type: Schema.Types.ObjectId,
       ref: "User",
       required: true,
-      unique: true,
+      unique: true, // ← index already created
     },
 
     items: [wishlistItemSchema],
@@ -41,12 +41,11 @@ const wishlistSchema: Schema<IWishlist> = new Schema(
   { timestamps: true }
 );
 
-wishlistSchema.index({ userId: 1 });
+// ✅ This index is fine and useful
 wishlistSchema.index({ "items.bookId": 1 });
 
-const Wishlist: Model<IWishlist> = mongoose.model<IWishlist>(
-  "Wishlist",
-  wishlistSchema
-);
+const Wishlist: Model<IWishlist> =
+  mongoose.models.Wishlist ||
+  mongoose.model<IWishlist>("Wishlist", wishlistSchema);
 
 export default Wishlist;

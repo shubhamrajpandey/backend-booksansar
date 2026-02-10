@@ -40,13 +40,13 @@ const cartItemSchema = new Schema(
   { _id: false }
 );
 
-const cartSchema: Schema<ICart> = new Schema(
+const cartSchema = new Schema<ICart>(
   {
     userId: {
       type: Schema.Types.ObjectId,
       ref: "User",
       required: true,
-      unique: true,
+      unique: true, // ← this already creates index
     },
 
     items: [cartItemSchema],
@@ -59,7 +59,6 @@ const cartSchema: Schema<ICart> = new Schema(
   { timestamps: true }
 );
 
-
 cartSchema.pre("save", function (next) {
   this.totalAmount = this.items.reduce(
     (total, item) => total + item.price * item.quantity,
@@ -68,8 +67,7 @@ cartSchema.pre("save", function (next) {
   next();
 });
 
-cartSchema.index({ userId: 1 });
-
-const Cart: Model<ICart> = mongoose.model<ICart>("Cart", cartSchema);
+const Cart: Model<ICart> =
+  mongoose.models.Cart || mongoose.model<ICart>("Cart", cartSchema);
 
 export default Cart;

@@ -26,13 +26,13 @@ const notificationSettingsSchema = new Schema(
   { _id: false }
 );
 
-const userPreferencesSchema: Schema<IUserPreferences> = new Schema(
+const userPreferencesSchema = new Schema<IUserPreferences>(
   {
     userId: {
       type: Schema.Types.ObjectId,
       ref: "User",
       required: true,
-      unique: true,
+      unique: true, // ← index handled here
     },
 
     notifications: {
@@ -54,12 +54,8 @@ const userPreferencesSchema: Schema<IUserPreferences> = new Schema(
   { timestamps: true }
 );
 
-// Index
-userPreferencesSchema.index({ userId: 1 });
-
-const UserPreferences: Model<IUserPreferences> = mongoose.model<IUserPreferences>(
-  "UserPreferences",
-  userPreferencesSchema
-);
+const UserPreferences: Model<IUserPreferences> =
+  mongoose.models.UserPreferences ||
+  mongoose.model<IUserPreferences>("UserPreferences", userPreferencesSchema);
 
 export default UserPreferences;
