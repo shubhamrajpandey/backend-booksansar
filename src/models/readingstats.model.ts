@@ -15,68 +15,30 @@ export interface IReadingStats extends Document {
   updatedAt: Date;
 }
 
-const readingStatsSchema: Schema<IReadingStats> = new Schema(
+const readingStatsSchema = new Schema<IReadingStats>(
   {
     userId: {
       type: Schema.Types.ObjectId,
       ref: "User",
       required: true,
-      unique: true,
+      unique: true, // ← index handled here
     },
 
-    booksRead: {
-      type: Number,
-      default: 0,
-    },
-
-    currentStreak: {
-      type: Number,
-      default: 0,
-    },
-
-    longestStreak: {
-      type: Number,
-      default: 0,
-    },
-
-    lastReadDate: {
-      type: Date,
-    },
-
-    totalReadingTime: {
-      type: Number,
-      default: 0,
-    },
-
-    favoriteGenre: {
-      type: String,
-      default: "Fiction",
-    },
-
-    booksThisMonth: {
-      type: Number,
-      default: 0,
-    },
-
-    pagesRead: {
-      type: Number,
-      default: 0,
-    },
-
-    monthlyGoal: {
-      type: Number,
-      default: 10,
-    },
+    booksRead: { type: Number, default: 0 },
+    currentStreak: { type: Number, default: 0 },
+    longestStreak: { type: Number, default: 0 },
+    lastReadDate: { type: Date },
+    totalReadingTime: { type: Number, default: 0 },
+    favoriteGenre: { type: String, default: "Fiction" },
+    booksThisMonth: { type: Number, default: 0 },
+    pagesRead: { type: Number, default: 0 },
+    monthlyGoal: { type: Number, default: 10 },
   },
   { timestamps: true }
 );
 
-
-readingStatsSchema.index({ userId: 1 });
-
-const ReadingStats: Model<IReadingStats> = mongoose.model<IReadingStats>(
-  "ReadingStats",
-  readingStatsSchema
-);
+const ReadingStats: Model<IReadingStats> =
+  mongoose.models.ReadingStats ||
+  mongoose.model<IReadingStats>("ReadingStats", readingStatsSchema);
 
 export default ReadingStats;

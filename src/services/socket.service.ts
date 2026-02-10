@@ -1,6 +1,7 @@
 import { Server, Socket } from "socket.io";
 import jwt, { JwtPayload } from "jsonwebtoken";
 import Message from "../models/message.model";
+import Conversation from "../models/conversation.model";
 import { SendMessagePayload } from "../types/chat";
 
 export const initSocket = (server: any) => {
@@ -34,11 +35,30 @@ export const initSocket = (server: any) => {
 
     socket.on("send-message", async (data: SendMessagePayload) => {
       try {
+        const conversation = await Conversation.findById(data.conversationId);
+
+        if (!conversation) {
+          return socket.emit("message-error", {
+            error: "Conversation not found",
+          });
+        }
+
+        if (!conversation.participants.includes(socket.data.userId)) {
+          return socket.emit("message-error", {
+            error: "You are not a participant in this conversation",
+          });
+        }
+
         const message = await Message.create({
           conversationId: data.conversationId,
           senderId: socket.data.userId,
           receiverId: data.receiverId,
           text: data.text,
+        });
+
+        await Conversation.findByIdAndUpdate(data.conversationId, {
+          lastMessage: data.text,
+          updatedAt: new Date(),
         });
 
         io.to(data.receiverId).emit("receive-message", message);
@@ -53,4 +73,6 @@ export const initSocket = (server: any) => {
       console.log("User disconnected:", socket.data.userId);
     });
   });
+
+  return io;
 };

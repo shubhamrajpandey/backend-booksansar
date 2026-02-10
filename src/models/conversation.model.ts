@@ -9,8 +9,19 @@ const conversationSchema = new Schema(
         required: true,
       },
     ],
+    bookId: {
+      type: Types.ObjectId,
+      ref: "Book",
+      required: true,
+    },
+    lastMessage: {
+      type: String,
+      default: "",
+    },
   },
   { timestamps: true },
 );
+
+conversationSchema.index({ participants: 1, bookId: 1 });
 
 export default model("Conversation", conversationSchema);
