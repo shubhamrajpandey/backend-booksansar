@@ -62,7 +62,7 @@ export const createOrGetConversation = async (req: Request, res: Response) => {
       participants: { $all: [userId, sellerId] },
       bookId: bookId,
     })
-      .populate("participants", "name email role")
+      .populate("participants", "name email role avatar")
       .populate("bookId", "title type coverImage price");
 
     if (!conversation) {
@@ -72,7 +72,7 @@ export const createOrGetConversation = async (req: Request, res: Response) => {
       });
 
       conversation = (await Conversation.findById(conversation._id)
-        .populate("participants", "name email role")
+        .populate("participants", "name email role avatar")
         .populate("bookId", "title type coverImage price")) as any;
     }
 
@@ -99,7 +99,7 @@ export const getUserConversations = async (req: Request, res: Response) => {
     const conversations = await Conversation.find({
       participants: userId,
     })
-      .populate("participants", "name email role")
+      .populate("participants", "name email role avatar")
       .populate("bookId", "title type coverImage price")
       .sort({ updatedAt: -1 });
 
@@ -137,9 +137,10 @@ export const getMessages = async (req: Request, res: Response) => {
       });
     }
 
-    const messages = await Message.find({ conversationId }).sort({
-      createdAt: 1,
-    });
+    const messages = await Message.find({ conversationId })
+      .populate("senderId", "name email avatar")
+      .populate("receiverId", "name email avatar")
+      .sort({ createdAt: 1 });
 
     await Message.updateMany(
       {
@@ -147,7 +148,7 @@ export const getMessages = async (req: Request, res: Response) => {
         receiverId: userId,
         isRead: false,
       },
-      { isRead: true },
+      { isRead: true }
     );
 
     res.status(StatusCodes.OK).json(messages);
@@ -155,6 +156,45 @@ export const getMessages = async (req: Request, res: Response) => {
     console.error("Get messages error:", error);
     res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({
       message: "Failed to get messages",
+    });
+  }
+};
+
+export const deleteConversation = async (req: Request, res: Response) => {
+  try {
+    const userId = req.user?.id;
+    const { conversationId } = req.params;
+
+    if (!userId) {
+      return res.status(StatusCodes.UNAUTHORIZED).json({
+        message: "User not authenticated",
+      });
+    }
+
+    const conversation = await Conversation.findById(conversationId);
+
+    if (!conversation) {
+      return res.status(StatusCodes.NOT_FOUND).json({
+        message: "Conversation not found",
+      });
+    }
+
+    if (!conversation.participants.includes(userId as any)) {
+      return res.status(StatusCodes.FORBIDDEN).json({
+        message: "You are not a participant in this conversation",
+      });
+    }
+
+    await Message.deleteMany({ conversationId });
+    await Conversation.findByIdAndDelete(conversationId);
+
+    res.status(StatusCodes.OK).json({
+      message: "Conversation deleted successfully",
+    });
+  } catch (error) {
+    console.error("Delete conversation error:", error);
+    res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({
+      message: "Failed to delete conversation",
     });
   }
 };

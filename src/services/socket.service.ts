@@ -33,6 +33,16 @@ export const initSocket = (server: any) => {
     console.log("User connected:", socket.data.userId);
     socket.join(socket.data.userId);
 
+    socket.on("join-conversation", (conversationId: string) => {
+      socket.join(conversationId);
+      console.log(`User ${socket.data.userId} joined conversation ${conversationId}`);
+    });
+
+    socket.on("leave-conversation", (conversationId: string) => {
+      socket.leave(conversationId);
+      console.log(`User ${socket.data.userId} left conversation ${conversationId}`);
+    });
+
     socket.on("send-message", async (data: SendMessagePayload) => {
       try {
         const conversation = await Conversation.findById(data.conversationId);
@@ -56,13 +66,29 @@ export const initSocket = (server: any) => {
           text: data.text,
         });
 
+        const populatedMessage = await Message.findById(message._id)
+          .populate("senderId", "name email avatar")
+          .populate("receiverId", "name email avatar");
+
         await Conversation.findByIdAndUpdate(data.conversationId, {
           lastMessage: data.text,
           updatedAt: new Date(),
         });
 
-        io.to(data.receiverId).emit("receive-message", message);
-        socket.emit("receive-message", message);
+        io.to(data.conversationId).emit("receive-message", populatedMessage);
+        
+        io.to(data.receiverId).emit("new-message-notification", {
+          conversationId: data.conversationId,
+          message: populatedMessage,
+        });
+
+        const updatedConversation = await Conversation.findById(data.conversationId)
+          .populate("participants", "name email role avatar")
+          .populate("bookId", "title type coverImage price");
+
+        io.to(socket.data.userId).emit("conversation-updated", updatedConversation);
+        io.to(data.receiverId).emit("conversation-updated", updatedConversation);
+
       } catch (error) {
         console.error("Send message error:", error);
         socket.emit("message-error", { error: "Failed to send message" });
