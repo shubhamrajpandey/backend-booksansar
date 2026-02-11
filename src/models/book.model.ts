@@ -49,8 +49,8 @@ const BookSchema: Schema = new Schema<IBook>(
     genre: { type: String },
 
     description: { type: String },
-    coverImage: { type: String },
-    additionalImages: [{ type: String }],
+    coverImage: { type: String, trim: true },
+    additionalImages: [{ type: String , trim: true }],
 
     uploader: {
       type: Schema.Types.ObjectId,
