@@ -323,19 +323,19 @@ export const updateUserAccountStatus = async (req: Request, res: Response) => {
 // Categories
 export const getAllCategories = async (req: Request, res: Response) => {
   try {
-    const page = Number(req.query.page) || 1;
-    const limit = Number(req.query.limit) || 8;
+    // const page = Number(req.query.page) || 1;
+    // const limit = Number(req.query.limit) || 8;
 
-    const safePage = page < 1 ? 1 : page;
-    const safeLimit = limit < 1 ? 8 : limit > 50 ? 50 : limit;
-    const skip = (safePage - 1) * safeLimit;
+    // const safePage = page < 1 ? 1 : page;
+    // const safeLimit = limit < 1 ? 8 : limit > 50 ? 50 : limit;
+    // const skip = (safePage - 1) * safeLimit;
 
-    const totalCategories = await Category.countDocuments();
+    // const totalCategories = await Category.countDocuments();
 
     const categories = await Category.find()
       .sort({ name: 1 })
-      .skip(skip)
-      .limit(safeLimit);
+      // .skip(skip)
+      // .limit(safeLimit);
 
     const bookCounts = await Book.aggregate([
       { 
@@ -368,10 +368,10 @@ export const getAllCategories = async (req: Request, res: Response) => {
       success: true,
       data: categoriesWithCounts,
       count: categoriesWithCounts.length,
-      page: safePage,
-      limit: safeLimit,
-      total: totalCategories,
-      totalPages: Math.ceil(totalCategories / safeLimit),
+      // page: safePage,
+      // limit: safeLimit,
+      // total: totalCategories,
+      // totalPages: Math.ceil(totalCategories / safeLimit),
     });
   } catch (error) {
     console.error("Error fetching categories:", error);
@@ -586,20 +586,20 @@ export const deleteCategory = async (req: Request, res: Response) => {
 // Genres
 export const getGenres = async (req: Request, res: Response) => {
   try {
-    const page = Number(req.query.page) || 1;
-    const limit = Number(req.query.limit) || 8;
+    // const page = Number(req.query.page) || 1;
+    // const limit = Number(req.query.limit) || 12;
 
-    const safePage = page < 1 ? 1 : page;
-    const safeLimit = limit < 1 ? 8 : limit > 50 ? 50 : limit;
-    const skip = (safePage - 1) * safeLimit;
+    // const safePage = page < 1 ? 1 : page;
+    // const safeLimit = limit < 1 ? 12 : limit > 50 ? 50 : limit;
+    // const skip = (safePage - 1) * safeLimit;
 
 
-    const totalGenres = await Genre.countDocuments();
+    // const totalGenres = await Genre.countDocuments();
 
     const genres = await Genre.find()
       .sort({ name: 1 })
-      .skip(skip)
-      .limit(safeLimit);
+      // .skip(skip)
+      // .limit(safeLimit);
 
     const bookCounts = await Book.aggregate([
       { 
@@ -633,10 +633,10 @@ export const getGenres = async (req: Request, res: Response) => {
       success: true,
       data: genresWithCounts,
       count: genresWithCounts.length,
-      page: safePage,
-      limit: safeLimit,
-      total: totalGenres,
-      totalPages: Math.ceil(totalGenres / safeLimit),
+      // page: safePage,
+      // limit: safeLimit,
+      // total: totalGenres,
+      // totalPages: Math.ceil(totalGenres / safeLimit),
     });
   } catch (error) {
     console.error("Error fetching genres:", error);
