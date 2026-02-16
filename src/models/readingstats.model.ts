@@ -13,6 +13,12 @@ export interface IReadingStats extends Document {
   lastReadDate: Date | null;
   readBooks: mongoose.Types.ObjectId[];
   genreCount: Record<string, number>;
+  currentlyReading: Array<{
+    bookId: mongoose.Types.ObjectId;
+    currentPage: number;
+    totalPages: number;
+    lastRead: Date;
+  }>;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -36,6 +42,14 @@ const ReadingStatsSchema: Schema = new Schema<IReadingStats>(
     lastReadDate: { type: Date, default: null },
     readBooks: [{ type: Schema.Types.ObjectId, ref: "Book" }],
     genreCount: { type: Map, of: Number, default: {} },
+    currentlyReading: [
+      {
+        bookId: { type: Schema.Types.ObjectId, ref: "Book", required: true },
+        currentPage: { type: Number, default: 0 },
+        totalPages: { type: Number, default: 0 },
+        lastRead: { type: Date, default: Date.now },
+      },
+    ],
   },
   { timestamps: true }
 );
