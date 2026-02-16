@@ -15,6 +15,7 @@ import accountRoute from "./routes/account.route";
 import cartRoute from "./routes/cart.route";
 import wishlistRoute from "./routes/wishlist.route";
 import  ratingRoute  from "./routes/rating.routes";
+import readingStatsRouter from "./routes/readingstats.routes";
 
 const app = express();
 
@@ -46,6 +47,7 @@ app.use("/api/account", accountRoute);
 app.use("/api/cart", cartRoute);
 app.use("/api/wishlist", wishlistRoute);
 app.use("/api/ratings", ratingRoute);
+app.use("/api/stats", readingStatsRouter);
 
 server.listen(PORT, () =>
   console.log(`Server running on port http://localhost:${PORT}`),
