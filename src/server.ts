@@ -14,8 +14,11 @@ import adminRoute from "./routes/admin.routes";
 import accountRoute from "./routes/account.route";
 import cartRoute from "./routes/cart.route";
 import wishlistRoute from "./routes/wishlist.route";
-import  ratingRoute  from "./routes/rating.routes";
+import ratingRoute from "./routes/rating.routes";
 import readingStatsRouter from "./routes/readingstats.routes";
+import bookmarkRoute from "./routes/bookmark.route";
+import highlightRoute from "./routes/highlight.route";
+import noteRoute from "./routes/note.route";
 
 const app = express();
 
@@ -48,6 +51,9 @@ app.use("/api/cart", cartRoute);
 app.use("/api/wishlist", wishlistRoute);
 app.use("/api/ratings", ratingRoute);
 app.use("/api/stats", readingStatsRouter);
+app.use("/api/bookmarks", bookmarkRoute);
+app.use("/api/highlights", highlightRoute);
+app.use("/api/notes", noteRoute);
 
 server.listen(PORT, () =>
   console.log(`Server running on port http://localhost:${PORT}`),

@@ -410,4 +410,3 @@ export const deleteBookDetails = async (req: Request, res: Response) => {
     });
   }
 };
-  

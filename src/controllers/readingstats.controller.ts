@@ -10,7 +10,7 @@ export const trackReading = async (req: Request, res: Response) => {
       return res.status(401).json({ message: "Unauthorized" });
     }
 
-    const { bookId, pagesRead, readingTimeSeconds } = req.body;
+    const { bookId, pagesRead, readingTimeSeconds, currentPage, totalPages } = req.body;
 
     if (!bookId || typeof pagesRead !== "number" || typeof readingTimeSeconds !== "number") {
       return res.status(400).json({ message: "Invalid payload" });
@@ -30,11 +30,38 @@ export const trackReading = async (req: Request, res: Response) => {
 
     const bookObjectId = book?._id as mongoose.Types.ObjectId | undefined;
 
+    // Update or add currently reading book
+    if (bookObjectId && currentPage !== undefined && totalPages !== undefined) {
+      const readingIndex = stats.currentlyReading.findIndex(
+        (r) => r.bookId.toString() === bookObjectId.toString()
+      );
+
+      if (readingIndex >= 0) {
+        stats.currentlyReading[readingIndex].currentPage = currentPage;
+        stats.currentlyReading[readingIndex].totalPages = totalPages;
+        stats.currentlyReading[readingIndex].lastRead = new Date();
+      } else {
+        stats.currentlyReading.push({
+          bookId: bookObjectId,
+          currentPage,
+          totalPages,
+          lastRead: new Date(),
+        });
+      }
+
+      // If book is finished, remove from currently reading and add to read books
+      if (currentPage >= totalPages) {
+        stats.currentlyReading = stats.currentlyReading.filter(
+          (r) => r.bookId.toString() !== bookObjectId.toString()
+        );
+      }
+    }
+
     const alreadyRead = bookObjectId
       ? stats.readBooks.some((id) => id.toString() === bookObjectId.toString())
       : false;
 
-    if (!alreadyRead && bookObjectId) {
+    if (!alreadyRead && bookObjectId && currentPage >= totalPages) {
       stats.readBooks.push(bookObjectId);
       stats.booksRead += 1;
 
@@ -99,6 +126,30 @@ export const trackReading = async (req: Request, res: Response) => {
     return res.status(200).json({ message: "Stats updated", stats });
   } catch (error) {
     console.error("trackReading error:", error);
+    return res.status(500).json({ message: "Server error" });
+  }
+};
+
+// Get reading stats with populated currently reading books
+export const getReadingStats = async (req: Request, res: Response) => {
+  try {
+    const userId = req.user?.id;
+    if (!userId) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+
+    let stats = await ReadingStats.findOne({ userId }).populate({
+      path: "currentlyReading.bookId",
+      select: "title author coverImage additionalImages",
+    });
+
+    if (!stats) {
+      stats = await ReadingStats.create({ userId });
+    }
+
+    return res.status(200).json({ stats });
+  } catch (error) {
+    console.error("getReadingStats error:", error);
     return res.status(500).json({ message: "Server error" });
   }
 };
