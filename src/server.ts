@@ -19,6 +19,7 @@ import readingStatsRouter from "./routes/readingstats.routes";
 import bookmarkRoute from "./routes/bookmark.route";
 import highlightRoute from "./routes/highlight.route";
 import noteRoute from "./routes/note.route";
+import paymentRoutes from "./routes/payment.routes";
 
 const app = express();
 
@@ -54,6 +55,7 @@ app.use("/api/stats", readingStatsRouter);
 app.use("/api/bookmarks", bookmarkRoute);
 app.use("/api/highlights", highlightRoute);
 app.use("/api/notes", noteRoute);
+app.use("/api/payment", paymentRoutes);
 
 server.listen(PORT, () =>
   console.log(`Server running on port http://localhost:${PORT}`),
