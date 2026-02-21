@@ -1,10 +1,15 @@
 import { Router } from "express";
-import { getAllUsers, deleteUser, updateVendorStatus, getAllCategories,
+import {
+  getAllUsers,
+  deleteUser,
+  updateVendorStatus,
+  getAllCategories,
   getCategoryById,
   addCategory,
   updateCategory,
   deleteCategory,
-  getActiveCategories, moderateFreeBook, 
+  getActiveCategories,
+  moderateFreeBook,
   updateUserAccountStatus,
   getVendorDetails,
   updateAdminPassword,
@@ -14,63 +19,99 @@ import { getAllUsers, deleteUser, updateVendorStatus, getAllCategories,
   getGenres,
   addGenre,
   updateGenre,
-  deleteGenre
+  deleteGenre,
 } from "../controllers/admin.controller";
 import { verifyRole } from "../middlewares/role.middleware";
 import { authenticateToken } from "../middlewares/auth.middleware";
 import { getPendingFreeBooks } from "../controllers/admin.controller";
 
-
 const router = Router();
 
-//get all users and filter by role or search
 router.get("/users", authenticateToken, verifyRole("admin"), getAllUsers);
 router.delete("/users/:id", authenticateToken, verifyRole("admin"), deleteUser);
 
-router.get("/vendors/:id/details", authenticateToken, verifyRole("admin"), getVendorDetails);
+router.get(
+  "/vendors/:id/details",
+  authenticateToken,
+  verifyRole("admin"),
+  getVendorDetails,
+);
 
 router.patch(
   "/vendors/:id/status",
   authenticateToken,
   verifyRole("admin"),
-  updateVendorStatus
+  updateVendorStatus,
 );
 
 router.patch(
   "/users/:id/account-status",
   authenticateToken,
   verifyRole("admin"),
-  updateUserAccountStatus
+  updateUserAccountStatus,
 );
 
-// Admin profile routes
 router.get("/profile", authenticateToken, verifyRole("admin"), getAdminProfile);
-router.put("/profile", authenticateToken, verifyRole("admin"), updateAdminProfile);
-router.put("/password", authenticateToken, verifyRole("admin"), updateAdminPassword);
+router.put(
+  "/profile",
+  authenticateToken,
+  verifyRole("admin"),
+  updateAdminProfile,
+);
+router.put(
+  "/password",
+  authenticateToken,
+  verifyRole("admin"),
+  updateAdminPassword,
+);
 
-router.get("/platform/stats", authenticateToken, verifyRole("admin"), getPlatformStats);
+router.get(
+  "/platform/stats",
+  authenticateToken,
+  verifyRole("admin"),
+  getPlatformStats,
+);
 
 router.get("/active", getActiveCategories);
 
 router.get("/categories", getAllCategories);
 router.get("/categories/:id", getCategoryById);
 router.post("/categories", authenticateToken, verifyRole("admin"), addCategory);
-router.put("/categories/:id", authenticateToken, verifyRole("admin"), updateCategory);
-router.delete("/categories/:id", authenticateToken, verifyRole("admin"), deleteCategory);
+router.put(
+  "/categories/:id",
+  authenticateToken,
+  verifyRole("admin"),
+  updateCategory,
+);
+router.delete(
+  "/categories/:id",
+  authenticateToken,
+  verifyRole("admin"),
+  deleteCategory,
+);
 
 router.get("/genres", getGenres);
 router.post("/genres", authenticateToken, verifyRole("admin"), addGenre);
 router.put("/genres/:id", authenticateToken, verifyRole("admin"), updateGenre);
-router.delete("/genres/:id", authenticateToken, verifyRole("admin"), deleteGenre);
+router.delete(
+  "/genres/:id",
+  authenticateToken,
+  verifyRole("admin"),
+  deleteGenre,
+);
 
 router.patch(
   "/books/:id/moderate",
   authenticateToken,
   verifyRole("admin"),
-  moderateFreeBook
+  moderateFreeBook,
 );
 
-router.get("/books/pending",authenticateToken,verifyRole("admin"),getPendingFreeBooks);
+router.get(
+  "/books/pending",
+  authenticateToken,
+  verifyRole("admin"),
+  getPendingFreeBooks,
+);
 
 export default router;
-    

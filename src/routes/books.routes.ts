@@ -14,8 +14,8 @@ const router = Router();
 router.post(
   "/",
   authenticateToken,
-  verifyRole("vendor", "learner","admin"), 
-  uploadBookDetails
+  verifyRole("vendor", "learner", "admin"),
+  uploadBookDetails,
 );
 
 router.get("/", getAllBooks);
@@ -26,9 +26,13 @@ router.patch(
   "/:id",
   authenticateToken,
   verifyRole("vendor", "learner", "admin"),
-  updateBookDetails
+  updateBookDetails,
 );
 
-
-router.delete("/:id",deleteBookDetails)
+router.delete(
+  "/:id",
+  authenticateToken,
+  verifyRole("admin"),
+  deleteBookDetails,
+);
 export default router;
