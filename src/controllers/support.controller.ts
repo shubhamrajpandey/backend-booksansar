@@ -177,8 +177,6 @@ const getAdminResolutionEmail = (
   };
 };
 
-// ─── Controllers ───────────────────────────────────────────────────────────────
-
 export const createSupportRequest = async (req: Request, res: Response) => {
   try {
     const { type, email, name, files } = req.body;
