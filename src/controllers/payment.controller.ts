@@ -1,95 +1,172 @@
-// backend-booksansar/src/controllers/payment.controller.ts
 import { Request, Response } from "express";
-import crypto from "crypto";
-import axios from "axios";
+import {
+  buildEsewaFormData,
+  verifyEsewaPayment,
+  ESEWA_PAYMENT_URL,
+} from "../services/esewa.service";
+import { calculateEscrow } from "../services/escrow.service";
+import { Order } from "../models/order.model";
+import Book from "../models/book.model";
 
-const ESEWA_SECRET_KEY = process.env.ESEWA_SECRET_KEY || "8gBm/:&EnhH.1/q";
-const ESEWA_PRODUCT_CODE = process.env.ESEWA_PRODUCT_CODE || "EPAYTEST";
-const ESEWA_SUCCESS_URL = process.env.ESEWA_SUCCESS_URL || "http://localhost:3000/checkout/payment/success";
-const ESEWA_FAILURE_URL = process.env.ESEWA_FAILURE_URL || "http://localhost:3000/checkout/payment/failure";
+export const initiateEsewaPayment = async (req: Request, res: Response) => {
+  try {
+    const customerId = (req as any).user?._id;
+    if (!customerId) {
+      return res.status(401).json({ success: false, message: "Unauthorized" });
+    }
 
-const generateSignature = (message: string, secretKey: string): string => {
-  const hmac = crypto.createHmac("sha256", secretKey);
-  hmac.update(message);
-  return hmac.digest("base64");
+    const {
+      items,
+      contact,
+      shippingAddress,
+      shippingMethod,
+      shippingCost,
+      subtotal,
+      totalAmount,
+    } = req.body;
+
+    if (!items?.length) {
+      return res
+        .status(400)
+        .json({ success: false, message: "No items in order" });
+    }
+
+    const bookIds = items.map((i: any) => i.bookId);
+    const books = await Book.find({ _id: { $in: bookIds } }).lean();
+
+    const bookMap = new Map(books.map((b) => [String(b._id), b]));
+
+    const resolvedItems = items.map((item: any) => {
+      const book = bookMap.get(String(item.bookId));
+      if (!book) throw new Error(`Book ${item.bookId} not found`);
+
+      return {
+        bookId: book._id,
+        title: book.title,
+        author: book.author,
+        image: book.coverImage || "",
+        price: book.price ?? 0,
+        bookType: book.type,
+        vendorId: book.vendorId,
+      };
+    });
+
+    const verifiedSubtotal = resolvedItems.reduce(
+      (sum: number, i: any) => sum + i.price,
+      0,
+    );
+    const verifiedShipping = shippingMethod === "express" ? 150 : 0;
+    const verifiedTotal = verifiedSubtotal + verifiedShipping;
+
+    const transactionUuid = `BS-${Date.now()}`;
+    const escrow = calculateEscrow(verifiedTotal);
+
+    const order = new Order({
+      orderId: transactionUuid,
+      customerId,
+      contact,
+      items: resolvedItems,
+      shippingAddress,
+      shippingMethod: shippingMethod || "standard",
+      shippingCost: verifiedShipping,
+      subtotal: verifiedSubtotal,
+      totalAmount: verifiedTotal,
+      status: "pending_payment",
+      payment: {
+        method: "esewa",
+        transactionUuid,
+      },
+      escrow: {
+        status: "holding",
+        ...escrow,
+      },
+      statusHistory: [{ status: "pending_payment", changedAt: new Date() }],
+    });
+
+    await order.save();
+
+    const formData = buildEsewaFormData({
+      amount: verifiedTotal,
+      transactionUuid,
+    });
+
+    return res.status(201).json({
+      success: true,
+      data: {
+        formData,
+        paymentUrl: ESEWA_PAYMENT_URL,
+        orderId: transactionUuid,
+      },
+    });
+  } catch (err: any) {
+    console.error("eSewa initiate error:", err.message);
+    return res.status(500).json({
+      success: false,
+      message: err.message || "Failed to initiate payment",
+    });
+  }
 };
 
-export const initiateEsewaPayment = (req: Request, res: Response) => {
-  const { amount, orderId } = req.body;
-
-  const totalAmount = Number(amount);
-  const transactionUuid = orderId || `${Date.now()}-${Math.random().toString(36).substr(2, 5)}`;
-
-  const signatureMessage = `total_amount=${totalAmount},transaction_uuid=${transactionUuid},product_code=${ESEWA_PRODUCT_CODE}`;
-  const signature = generateSignature(signatureMessage, ESEWA_SECRET_KEY);
-
-  res.json({
-    success: true,
-    data: {
-      amount: totalAmount,
-      tax_amount: 0,
-      total_amount: totalAmount,
-      transaction_uuid: transactionUuid,
-      product_code: ESEWA_PRODUCT_CODE,
-      product_service_charge: 0,
-      product_delivery_charge: 0,
-      success_url: ESEWA_SUCCESS_URL,
-      failure_url: ESEWA_FAILURE_URL,
-      signed_field_names: "total_amount,transaction_uuid,product_code",
-      signature,
-    },
-  });
-};
-
-export const verifyEsewaPayment = async (req: Request, res: Response) => {
+export const verifyEsewaPaymentCallback = async (
+  req: Request,
+  res: Response,
+) => {
   const { data } = req.query;
 
   if (!data) {
-    return res.status(400).json({ success: false, message: "No data received" });
+    return res
+      .status(400)
+      .json({ success: false, message: "No payment data received" });
   }
 
   try {
-    const decoded = JSON.parse(Buffer.from(data as string, "base64").toString("utf-8"));
+    const result = await verifyEsewaPayment(data as string);
 
-    const {
-      transaction_code,
-      status,
-      total_amount,
-      transaction_uuid,
-      product_code,
-      signed_field_names,
-      signature: receivedSignature,
-    } = decoded;
-
-    const signatureMessage = `transaction_code=${transaction_code},status=${status},total_amount=${total_amount},transaction_uuid=${transaction_uuid},product_code=${product_code},signed_field_names=${signed_field_names}`;
-    const expectedSignature = generateSignature(signatureMessage, ESEWA_SECRET_KEY);
-
-    if (expectedSignature !== receivedSignature) {
-      return res.status(400).json({ success: false, message: "Invalid signature" });
+    if (!result.verified) {
+      return res
+        .status(400)
+        .json({ success: false, message: "Payment verification failed" });
     }
 
-    const statusRes = await axios.get(
-      `https://rc.esewa.com.np/api/epay/transaction/status/`,
+    const order = await Order.findOneAndUpdate(
       {
-        params: {
-          product_code: ESEWA_PRODUCT_CODE,
-          total_amount,
-          transaction_uuid,
+        orderId: result.transactionUuid,
+        status: "pending_payment",
+      },
+      {
+        status: "payment_received",
+        "payment.transactionCode": result.transactionCode,
+        "payment.verifiedAt": new Date(),
+        $push: {
+          statusHistory: {
+            status: "payment_received",
+            changedAt: new Date(),
+            note: `eSewa transaction ${result.transactionCode}`,
+          },
         },
-      }
+      },
+      { new: true },
     );
 
-    if (statusRes.data.status !== "COMPLETE") {
-      return res.status(400).json({ success: false, message: "Payment not complete" });
+    if (!order) {
+      return res
+        .status(200)
+        .json({ success: true, message: "Already processed" });
     }
 
     return res.json({
       success: true,
-      message: "Payment verified successfully",
-      transaction: statusRes.data,
+      message: "Payment verified. Order placed successfully.",
+      data: {
+        orderId: order.orderId,
+        totalAmount: order.totalAmount,
+        escrow: order.escrow,
+      },
     });
-  } catch (err) {
-    console.error("eSewa verification error:", err);
-    return res.status(500).json({ success: false, message: "Verification failed" });
+  } catch (err: any) {
+    console.error("eSewa verification error:", err.message);
+    return res
+      .status(500)
+      .json({ success: false, message: "Verification failed" });
   }
 };

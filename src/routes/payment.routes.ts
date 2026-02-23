@@ -1,13 +1,14 @@
-// src/routes/payment.routes.ts
 import { Router } from "express";
 import {
   initiateEsewaPayment,
-  verifyEsewaPayment,
+  verifyEsewaPaymentCallback,
 } from "../controllers/payment.controller";
+import { authenticateToken } from "../middlewares/auth.middleware";
 
 const router = Router();
 
-router.post("/esewa/initiate", initiateEsewaPayment);
-router.get("/esewa/verify", verifyEsewaPayment);
+router.post("/esewa/initiate", authenticateToken, initiateEsewaPayment);
+
+router.get("/esewa/verify", verifyEsewaPaymentCallback);
 
 export default router;
