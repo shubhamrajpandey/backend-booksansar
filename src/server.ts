@@ -21,6 +21,7 @@ import highlightRoute from "./routes/highlight.route";
 import noteRoute from "./routes/note.route";
 import paymentRoutes from "./routes/payment.routes";
 import supportRoutes from "./routes/support.routes";
+import orderRoutes from "./routes/order.routes";
 
 const app = express();
 
@@ -58,6 +59,7 @@ app.use("/api/highlights", highlightRoute);
 app.use("/api/notes", noteRoute);
 app.use("/api/payment", paymentRoutes);
 app.use("/api/support", supportRoutes);
+app.use("/api/orders", orderRoutes);
 
 server.listen(PORT, () =>
   console.log(`Server running on port http://localhost:${PORT}`),

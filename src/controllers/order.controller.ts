@@ -1,104 +1,219 @@
-// controllers/order.controller.ts
-import { StatusCodes } from "http-status-codes";
 import { Request, Response } from "express";
-import Book, { IBook } from "../models/book.model";
-import Order from "../models/order.model";
-import mongoose from "mongoose";
+import { Order } from "../models/order.model";
 
-export const createOrder = async (req: Request, res: Response) => {
+export const getMyOrders = async (req: Request, res: Response) => {
   try {
-    if (!req.user) {
-      return res.status(StatusCodes.UNAUTHORIZED).json({
+    const customerId = (req as any).user?._id;
+    const orders = await Order.find({ customerId })
+      .sort({ createdAt: -1 })
+      .select("-statusHistory");
+
+    return res.json({ success: true, data: orders });
+  } catch (err) {
+    return res
+      .status(500)
+      .json({ success: false, message: "Failed to fetch orders" });
+  }
+};
+
+export const getOrderById = async (req: Request, res: Response) => {
+  try {
+    const order = await Order.findOne({ orderId: req.params.orderId })
+      .populate("customerId", "name email")
+      .populate("items.bookId", "title coverImage type")
+      .populate("items.vendorId", "storeName");
+
+    if (!order)
+      return res
+        .status(404)
+        .json({ success: false, message: "Order not found" });
+
+    return res.json({ success: true, data: order });
+  } catch (err) {
+    return res
+      .status(500)
+      .json({ success: false, message: "Failed to fetch order" });
+  }
+};
+
+export const getVendorOrders = async (req: Request, res: Response) => {
+  try {
+    const vendorId = (req as any).user?._id;
+    const { status } = req.query;
+
+    const filter: any = { "items.vendorId": vendorId };
+    if (status) filter.status = status;
+
+    const orders = await Order.find(filter)
+      .sort({ createdAt: -1 })
+      .select("-statusHistory");
+
+    return res.json({ success: true, data: orders });
+  } catch (err) {
+    return res
+      .status(500)
+      .json({ success: false, message: "Failed to fetch vendor orders" });
+  }
+};
+
+export const getAllOrdersAdmin = async (req: Request, res: Response) => {
+  try {
+    const { status, page = 1, limit = 20, search } = req.query;
+
+    const filter: any = {};
+    if (status) filter.status = status;
+    if (search) {
+      filter.$or = [
+        { orderId: { $regex: search, $options: "i" } },
+        { contact: { $regex: search, $options: "i" } },
+      ];
+    }
+
+    const skip = (Number(page) - 1) * Number(limit);
+
+    const [orders, total] = await Promise.all([
+      Order.find(filter)
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(Number(limit))
+        .populate("customerId", "name email")
+        .select("-statusHistory"),
+      Order.countDocuments(filter),
+    ]);
+
+    return res.json({
+      success: true,
+      data: orders,
+      pagination: {
+        total,
+        page: Number(page),
+        limit: Number(limit),
+        pages: Math.ceil(total / Number(limit)),
+      },
+    });
+  } catch (err) {
+    return res
+      .status(500)
+      .json({ success: false, message: "Failed to fetch orders" });
+  }
+};
+
+export const updateOrderStatus = async (req: Request, res: Response) => {
+  try {
+    const { status, note } = req.body;
+    const { orderId } = req.params;
+
+    const allowed = [
+      "confirmed",
+      "shipped",
+      "delivered",
+      "cancelled",
+      "refunded",
+    ];
+    if (!allowed.includes(status)) {
+      return res
+        .status(400)
+        .json({ success: false, message: "Invalid status value" });
+    }
+
+    const order = await Order.findOne({ orderId });
+    if (!order)
+      return res
+        .status(404)
+        .json({ success: false, message: "Order not found" });
+
+    if (["delivered", "refunded"].includes(order.status)) {
+      return res.status(400).json({
         success: false,
-        message: "Authentication required",
+        message: `Cannot change a ${order.status} order`,
       });
     }
 
-    const { items } = req.body;
-
-    if (!items || !Array.isArray(items) || items.length === 0) {
-      return res.status(StatusCodes.BAD_REQUEST).json({
-        success: false,
-        message: "Order must contain at least one item",
-      });
-    }
-
-    const bookIds = items.map((i: any) => i.bookId);
-
-    // Cast to IBook[] so _id is properly typed
-    const books = await Book.find({
-      _id: { $in: bookIds },
-      visibility: "public",
-      type: "physical",
-    }).lean<IBook[]>();
-
-    if (books.length !== bookIds.length) {
-      return res.status(StatusCodes.BAD_REQUEST).json({
-        success: false,
-        message: "One or more books are unavailable",
-      });
-    }
-
-    // Check stock
-    for (const item of items) {
-      const book = books.find(
-        (b) => (b._id as mongoose.Types.ObjectId).toString() === item.bookId
-      );
-      if (!book) continue;
-      if ((book.stock ?? 0) < item.quantity) {
-        return res.status(StatusCodes.BAD_REQUEST).json({
-          success: false,
-          message: `Insufficient stock for "${book.title}"`,
-        });
-      }
-    }
-
-    // Build order items
-    const orderItems = items.map((item: any) => {
-      const book = books.find(
-        (b) => (b._id as mongoose.Types.ObjectId).toString() === item.bookId
-      )!;
-      return {
-        book: book._id,
-        title: book.title,
-        author: book.author,
-        price: book.price!,
-        quantity: item.quantity,
-        image: book.additionalImages?.[0] || "",
-      };
+    order.status = status as any;
+    order.statusHistory.push({
+      status: status as any,
+      changedAt: new Date(),
+      note,
     });
 
-    const subtotal = orderItems.reduce(
-      (sum: number, i: any) => sum + i.price * i.quantity,
-      0
+    if (status === "delivered" && order.escrow.status === "holding") {
+      order.escrow.status = "released";
+      order.escrow.releasedAt = new Date();
+    }
+
+    if (status === "refunded") {
+      order.escrow.status = "refunded";
+    }
+
+    await order.save();
+
+    return res.json({
+      success: true,
+      message: `Order updated to ${status}`,
+      data: {
+        orderId: order.orderId,
+        status: order.status,
+        escrowStatus: order.escrow.status,
+        vendorAmount: order.escrow.vendorAmount,
+        commissionAmount: order.escrow.commissionAmount,
+      },
+    });
+  } catch (err) {
+    return res
+      .status(500)
+      .json({ success: false, message: "Failed to update order status" });
+  }
+};
+
+export const getOrderStats = async (_req: Request, res: Response) => {
+  try {
+    const [total, byStatus, revenue] = await Promise.all([
+      Order.countDocuments(),
+
+      Order.aggregate([{ $group: { _id: "$status", count: { $sum: 1 } } }]),
+
+      Order.aggregate([
+        {
+          $match: {
+            status: {
+              $in: ["payment_received", "confirmed", "shipped", "delivered"],
+            },
+          },
+        },
+        {
+          $group: {
+            _id: null,
+            totalRevenue: { $sum: "$totalAmount" },
+            totalCommission: { $sum: "$escrow.commissionAmount" },
+            totalPaidOut: { $sum: "$escrow.vendorAmount" },
+          },
+        },
+      ]),
+    ]);
+
+    const statusMap = Object.fromEntries(
+      byStatus.map((s: any) => [s._id, s.count]),
     );
 
-    const order = await Order.create({
-      user: req.user.id,
-      items: orderItems,
-      subtotal,
-      shipping: 0,
-      total: subtotal,
-      status: "pending",
-    });
-
-    // Decrement stock for each book
-    for (const item of items) {
-      await Book.findByIdAndUpdate(item.bookId, {
-        $inc: { stock: -item.quantity },
-      });
-    }
-
-    return res.status(StatusCodes.CREATED).json({
+    return res.json({
       success: true,
-      message: "Order created successfully",
-      order,
+      data: {
+        total,
+        pending: statusMap["pending_payment"] ?? 0,
+        paymentReceived: statusMap["payment_received"] ?? 0,
+        confirmed: statusMap["confirmed"] ?? 0,
+        shipped: statusMap["shipped"] ?? 0,
+        delivered: statusMap["delivered"] ?? 0,
+        cancelled: statusMap["cancelled"] ?? 0,
+        refunded: statusMap["refunded"] ?? 0,
+        totalRevenue: revenue[0]?.totalRevenue ?? 0,
+        totalCommission: revenue[0]?.totalCommission ?? 0,
+        totalPaidOut: revenue[0]?.totalPaidOut ?? 0,
+      },
     });
-  } catch (error) {
-    console.error("CREATE ORDER ERROR:", error);
-    return res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({
-      success: false,
-      message: "Failed to create order",
-    });
+  } catch (err) {
+    return res
+      .status(500)
+      .json({ success: false, message: "Failed to fetch stats" });
   }
 };
