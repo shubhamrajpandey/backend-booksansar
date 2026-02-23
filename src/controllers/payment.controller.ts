@@ -10,7 +10,7 @@ import Book from "../models/book.model";
 
 export const initiateEsewaPayment = async (req: Request, res: Response) => {
   try {
-    const customerId = (req as any).user?._id;
+    const customerId = (req as any).user?.id;
     if (!customerId) {
       return res.status(401).json({ success: false, message: "Unauthorized" });
     }
@@ -39,6 +39,13 @@ export const initiateEsewaPayment = async (req: Request, res: Response) => {
     const resolvedItems = items.map((item: any) => {
       const book = bookMap.get(String(item.bookId));
       if (!book) throw new Error(`Book ${item.bookId} not found`);
+
+      // ADD THIS GUARD
+      if (!book.vendorId) {
+        throw new Error(
+          `Book "${book.title}" has no vendor assigned. Cannot process order.`,
+        );
+      }
 
       return {
         bookId: book._id,

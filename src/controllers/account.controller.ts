@@ -4,7 +4,7 @@ import ReadingStats from "../models/readingstats.model";
 import Wishlist from "../models/wishlist.model";
 import Cart from "../models/cart.model";
 import UserPreferences from "../models/userpreferences.model";
-//import Order from "../models/order.model";
+import { Order } from "../models/order.model";
 
 // Get user profile with all related data
 export const getProfile = async (req: Request, res: Response) => {
@@ -148,22 +148,23 @@ export const getOrders = async (req: Request, res: Response) => {
     const limit = parseInt(req.query.limit as string) || 10;
     const skip = (page - 1) * limit;
 
-    // const [orders, total] = await Promise.all([
-    //   Order.find({ userId })
-    //     .sort({ createdAt: -1 })
-    //     .skip(skip)
-    //     .limit(limit)
-    //     .populate("items.bookId"),
-    //   Order.countDocuments({ userId }),
-    // ]);
+    const [orders, total] = await Promise.all([
+      Order.find({ customerId: userId })
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(limit)
+        .select("-statusHistory"), // strip verbose history for list view
+      Order.countDocuments({ customerId: userId }),
+    ]);
 
     res.status(200).json({
-      //orders,
+      success: true,
+      data: orders,
       pagination: {
         page,
         limit,
-      //  total,
-        //totalPages: Math.ceil(total / limit),
+        total,
+        pages: Math.ceil(total / limit),
       },
     });
   } catch (error) {
@@ -237,6 +238,7 @@ export const deleteAccount = async (req: Request, res: Response) => {
     if (!user) {
       return res.status(404).json({ message: "User not found" });
     }
+
     await Promise.all([
       User.findByIdAndDelete(userId),
       ReadingStats.findOneAndDelete({ userId }),

@@ -1,8 +1,8 @@
 import { StatusCodes } from "http-status-codes";
 import { Request, Response } from "express";
 import Book from "../models/book.model";
+import Vendor from "../models/vendor.model";
 
-//upload book details
 export const uploadBookDetails = async (req: Request, res: Response) => {
   try {
     if (!req.user) {
@@ -79,11 +79,7 @@ export const uploadBookDetails = async (req: Request, res: Response) => {
     }
 
     if (type === "physical") {
-      if (
-        price === undefined ||
-        stock === undefined ||
-        !deliveryInfo
-      ) {
+      if (price === undefined || stock === undefined || !deliveryInfo) {
         return res.status(StatusCodes.BAD_REQUEST).json({
           success: false,
           message:
@@ -103,8 +99,7 @@ export const uploadBookDetails = async (req: Request, res: Response) => {
       if (price === undefined || !condition) {
         return res.status(StatusCodes.BAD_REQUEST).json({
           success: false,
-          message:
-            "Second-hand books require price and condition",
+          message: "Second-hand books require price and condition",
         });
       }
 
@@ -116,8 +111,21 @@ export const uploadBookDetails = async (req: Request, res: Response) => {
       }
     }
 
-    let visibility: "public" | "pending";
+    // Resolve vendorId for physical books
+    let vendorId = undefined;
+    if (type === "physical") {
+      const vendor = await Vendor.findOne({ userId: uploader });
+      if (!vendor) {
+        return res.status(StatusCodes.FORBIDDEN).json({
+          success: false,
+          message:
+            "Vendor profile not found. Please complete vendor registration.",
+        });
+      }
+      vendorId = vendor._id;
+    }
 
+    let visibility: "public" | "pending";
     if (role === "admin") {
       visibility = "public";
     } else {
@@ -155,6 +163,7 @@ export const uploadBookDetails = async (req: Request, res: Response) => {
       printedPrice,
       bookType,
       uploader,
+      vendorId,
       visibility,
     });
 
@@ -168,7 +177,6 @@ export const uploadBookDetails = async (req: Request, res: Response) => {
     });
   } catch (error: any) {
     console.error("UPLOAD BOOK ERROR:", error);
-
     return res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({
       success: false,
       message: "Failed to upload book",
@@ -201,9 +209,9 @@ export const getAllBooks = async (req: Request, res: Response) => {
     } else {
       filter.visibility = "public";
     }
-    
+
     if (type && typeof type === "string") {
-      const types = type.split(",").map(t => t.trim());
+      const types = type.split(",").map((t) => t.trim());
       if (types.length > 1) {
         filter.type = { $in: types };
       } else {
@@ -229,10 +237,10 @@ export const getAllBooks = async (req: Request, res: Response) => {
       filter.category = { $in: category.split(",") };
     }
 
-    if(genre && typeof genre === "string"){
+    if (genre && typeof genre === "string") {
       filter.genre = { $in: genre.split(",") };
     }
-    
+
     if (location && typeof location === "string") {
       filter.location = location;
     }
@@ -290,7 +298,7 @@ export const getSingleBook = async (req: Request, res: Response) => {
 
     const book = await Book.findOne(filter).populate(
       "uploader",
-      "name email role"
+      "name email role",
     );
 
     if (!book) {
@@ -356,11 +364,10 @@ export const updateBookDetails = async (req: Request, res: Response) => {
       });
     }
 
-    const updatedBook = await Book.findByIdAndUpdate(
-      req.params.id,
-      updates,
-      { new: true, runValidators: true }
-    );
+    const updatedBook = await Book.findByIdAndUpdate(req.params.id, updates, {
+      new: true,
+      runValidators: true,
+    });
 
     return res.status(StatusCodes.OK).json({
       success: true,
