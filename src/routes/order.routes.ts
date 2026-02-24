@@ -6,6 +6,7 @@ import {
   getVendorOrders,
   updateOrderStatus,
   getOrderStats,
+  getVendorEarnings,
 } from "../controllers/order.controller";
 import { authenticateToken } from "../middlewares/auth.middleware";
 import { verifyRole } from "../middlewares/role.middleware";
@@ -13,7 +14,6 @@ import { verifyRole } from "../middlewares/role.middleware";
 const router = Router();
 
 router.get("/my", authenticateToken, getMyOrders);
-router.get("/:orderId", authenticateToken, getOrderById);
 
 router.get(
   "/vendor/mine",
@@ -21,13 +21,13 @@ router.get(
   verifyRole("vendor"),
   getVendorOrders,
 );
-router.patch(
-  "/:orderId/status",
-  authenticateToken,
-  verifyRole("vendor", "admin"),
-  updateOrderStatus,
-);
 
+router.get(
+  "/admin/stats",
+  authenticateToken,
+  verifyRole("admin"),
+  getOrderStats,
+);
 router.get(
   "/admin/all",
   authenticateToken,
@@ -35,10 +35,18 @@ router.get(
   getAllOrdersAdmin,
 );
 router.get(
-  "/admin/stats",
+  "/admin/vendor-earnings",
   authenticateToken,
   verifyRole("admin"),
-  getOrderStats,
+  getVendorEarnings,
+);
+
+router.get("/:orderId", authenticateToken, getOrderById);
+router.patch(
+  "/:orderId/status",
+  authenticateToken,
+  verifyRole("vendor", "admin"),
+  updateOrderStatus,
 );
 
 export default router;
