@@ -1,9 +1,11 @@
 import { Request, Response } from "express";
 import { Order } from "../models/order.model";
+import Vendor from "../models/vendor.model";
 
 export const getMyOrders = async (req: Request, res: Response) => {
   try {
-    const customerId = (req as any).user?._id;
+    const customerId = (req as any).user?.id; // ✅ was user?._id
+
     const orders = await Order.find({ customerId })
       .sort({ createdAt: -1 })
       .select("-statusHistory");
@@ -38,17 +40,43 @@ export const getOrderById = async (req: Request, res: Response) => {
 
 export const getVendorOrders = async (req: Request, res: Response) => {
   try {
-    const vendorId = (req as any).user?._id;
-    const { status } = req.query;
+    const userId = (req as any).user?.id; // ✅ was user?._id
 
-    const filter: any = { "items.vendorId": vendorId };
+    // ✅ Must look up Vendor by userId — items.vendorId stores Vendor._id not User._id
+    const vendor = await Vendor.findOne({ userId });
+    if (!vendor) {
+      return res.status(404).json({
+        success: false,
+        message: "Vendor profile not found.",
+      });
+    }
+
+    const { status, page = 1, limit = 20 } = req.query;
+    const skip = (Number(page) - 1) * Number(limit);
+
+    const filter: any = { "items.vendorId": vendor._id }; // ✅ now using vendor._id
     if (status) filter.status = status;
 
-    const orders = await Order.find(filter)
-      .sort({ createdAt: -1 })
-      .select("-statusHistory");
+    const [orders, total] = await Promise.all([
+      Order.find(filter)
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(Number(limit))
+        .populate("customerId", "name email") // ✅ was missing
+        .select("-statusHistory"),
+      Order.countDocuments(filter),
+    ]);
 
-    return res.json({ success: true, data: orders });
+    return res.json({
+      success: true,
+      data: orders,
+      pagination: {
+        total,
+        page: Number(page),
+        limit: Number(limit),
+        pages: Math.ceil(total / Number(limit)),
+      },
+    });
   } catch (err) {
     return res
       .status(500)
