@@ -4,7 +4,7 @@ import Vendor from "../models/vendor.model";
 
 export const getMyOrders = async (req: Request, res: Response) => {
   try {
-    const customerId = (req as any).user?.id; // ✅ was user?._id
+    const customerId = (req as any).user?.id;
 
     const orders = await Order.find({ customerId })
       .sort({ createdAt: -1 })
@@ -40,9 +40,8 @@ export const getOrderById = async (req: Request, res: Response) => {
 
 export const getVendorOrders = async (req: Request, res: Response) => {
   try {
-    const userId = (req as any).user?.id; // ✅ was user?._id
+    const userId = (req as any).user?.id;
 
-    // ✅ Must look up Vendor by userId — items.vendorId stores Vendor._id not User._id
     const vendor = await Vendor.findOne({ userId });
     if (!vendor) {
       return res.status(404).json({
@@ -54,7 +53,7 @@ export const getVendorOrders = async (req: Request, res: Response) => {
     const { status, page = 1, limit = 20 } = req.query;
     const skip = (Number(page) - 1) * Number(limit);
 
-    const filter: any = { "items.vendorId": vendor._id }; // ✅ now using vendor._id
+    const filter: any = { "items.vendorId": vendor._id };
     if (status) filter.status = status;
 
     const [orders, total] = await Promise.all([
@@ -62,7 +61,7 @@ export const getVendorOrders = async (req: Request, res: Response) => {
         .sort({ createdAt: -1 })
         .skip(skip)
         .limit(Number(limit))
-        .populate("customerId", "name email") // ✅ was missing
+        .populate("customerId", "name email")
         .select("-statusHistory"),
       Order.countDocuments(filter),
     ]);
@@ -190,6 +189,94 @@ export const updateOrderStatus = async (req: Request, res: Response) => {
     return res
       .status(500)
       .json({ success: false, message: "Failed to update order status" });
+  }
+};
+
+export const getVendorEarnings = async (_req: Request, res: Response) => {
+  try {
+    const earnings = await Order.aggregate([
+      {
+        $match: {
+          status: {
+            $in: [
+              "payment_received",
+              "confirmed",
+              "shipped",
+              "delivered",
+              "refunded",
+            ],
+          },
+        },
+      },
+      { $unwind: "$items" },
+      {
+        $group: {
+          _id: "$items.vendorId",
+          totalOrders: { $addToSet: "$_id" },
+          grossAmount: { $sum: "$escrow.grossAmount" },
+          commissionAmount: { $sum: "$escrow.commissionAmount" },
+          vendorAmount: { $sum: "$escrow.vendorAmount" },
+          releasedAmount: {
+            $sum: {
+              $cond: [
+                { $eq: ["$escrow.status", "released"] },
+                "$escrow.vendorAmount",
+                0,
+              ],
+            },
+          },
+          holdingAmount: {
+            $sum: {
+              $cond: [
+                { $eq: ["$escrow.status", "holding"] },
+                "$escrow.vendorAmount",
+                0,
+              ],
+            },
+          },
+        },
+      },
+      {
+        $lookup: {
+          from: "vendors",
+          localField: "_id",
+          foreignField: "_id",
+          as: "vendor",
+        },
+      },
+      { $unwind: { path: "$vendor", preserveNullAndEmptyArrays: true } },
+      {
+        $lookup: {
+          from: "users",
+          localField: "vendor.userId",
+          foreignField: "_id",
+          as: "user",
+        },
+      },
+      { $unwind: { path: "$user", preserveNullAndEmptyArrays: true } },
+      {
+        $project: {
+          _id: 1,
+          storeName: "$vendor.storeName",
+          esewaId: "$vendor.esewaId",
+          ownerName: "$user.name",
+          ownerEmail: "$user.email",
+          totalOrders: { $size: "$totalOrders" },
+          grossAmount: 1,
+          commissionAmount: 1,
+          vendorAmount: 1,
+          releasedAmount: 1,
+          holdingAmount: 1,
+        },
+      },
+      { $sort: { grossAmount: -1 } },
+    ]);
+
+    return res.json({ success: true, data: earnings });
+  } catch (err) {
+    return res
+      .status(500)
+      .json({ success: false, message: "Failed to fetch vendor earnings" });
   }
 };
 
