@@ -12,7 +12,7 @@ const conversationSchema = new Schema(
     bookId: {
       type: Types.ObjectId,
       ref: "Book",
-      required: true,
+      required: false,
     },
     lastMessage: {
       type: String,
