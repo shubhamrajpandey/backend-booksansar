@@ -63,7 +63,7 @@ app.use("/api/payment", paymentRoutes);
 app.use("/api/support", supportRoutes);
 app.use("/api/orders", orderRoutes);
 app.use("/api/payouts", payoutRoutes);
-app.use("/api/bookswap", bookSwapRoute);
+app.use("/api/swaps", bookSwapRoute);
 
 server.listen(PORT, () =>
   console.log(`Server running on port http://localhost:${PORT}`),
