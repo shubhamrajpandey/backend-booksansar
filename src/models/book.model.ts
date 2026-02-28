@@ -1,7 +1,7 @@
 import mongoose, { Schema, Document, Model } from "mongoose";
 
 export interface IBook extends Document {
-  type: "free" | "physical" | "second-hand";
+  type: "free" | "physical" | "second-hand" | "free-notes";
   title: string;
   author: string;
   category: string;
@@ -20,7 +20,7 @@ export interface IBook extends Document {
     insideValley?: number;
     outsideValley?: number;
   };
-  visibility: "public" | "pending" | "blocked";
+  visibility: "public" | "pending" | "rejected";
   rating?: number;
   reviewsCount?: number;
   printedPrice?: number;
@@ -40,7 +40,7 @@ const BookSchema: Schema = new Schema<IBook>(
     type: {
       type: String,
       required: true,
-      enum: ["free", "physical", "second-hand"],
+      enum: ["free", "physical", "second-hand", "free-notes"],
     },
 
     title: { type: String, required: true },
@@ -50,7 +50,7 @@ const BookSchema: Schema = new Schema<IBook>(
 
     description: { type: String },
     coverImage: { type: String, trim: true },
-    additionalImages: [{ type: String , trim: true }],
+    additionalImages: [{ type: String, trim: true }],
 
     uploader: {
       type: Schema.Types.ObjectId,
@@ -62,7 +62,6 @@ const BookSchema: Schema = new Schema<IBook>(
 
     price: { type: Number },
     mrp: { type: Number },
-
     stock: { type: Number },
 
     condition: {
@@ -82,7 +81,7 @@ const BookSchema: Schema = new Schema<IBook>(
 
     visibility: {
       type: String,
-      enum: ["public", "pending", "blocked"],
+      enum: ["public", "pending", "rejected"],
       required: true,
     },
 
@@ -99,9 +98,8 @@ const BookSchema: Schema = new Schema<IBook>(
   },
   {
     timestamps: true,
-  }
+  },
 );
-
 
 const Book: Model<IBook> = mongoose.model<IBook>("Book", BookSchema);
 

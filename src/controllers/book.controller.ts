@@ -48,7 +48,7 @@ export const uploadBookDetails = async (req: Request, res: Response) => {
       });
     }
 
-    if (!["free", "physical", "second-hand"].includes(type)) {
+    if (!["free", "physical", "second-hand", "free-notes"].includes(type)) {
       return res.status(StatusCodes.BAD_REQUEST).json({
         success: false,
         message: "Invalid book type",
@@ -69,11 +69,11 @@ export const uploadBookDetails = async (req: Request, res: Response) => {
       });
     }
 
-    if (type === "free") {
+    if (type === "free" || type === "free-notes") {
       if (!pdfUrl) {
         return res.status(StatusCodes.BAD_REQUEST).json({
           success: false,
-          message: "Free books must include a PDF URL",
+          message: `${type === "free-notes" ? "Free notes" : "Free books"} must include a PDF URL`,
         });
       }
     }
@@ -86,7 +86,6 @@ export const uploadBookDetails = async (req: Request, res: Response) => {
             "Physical books require price, stock, and delivery information",
         });
       }
-
       if (price < 0 || stock < 0) {
         return res.status(StatusCodes.BAD_REQUEST).json({
           success: false,
@@ -102,7 +101,6 @@ export const uploadBookDetails = async (req: Request, res: Response) => {
           message: "Second-hand books require price and condition",
         });
       }
-
       if (!["new", "used-good", "used-ok"].includes(condition)) {
         return res.status(StatusCodes.BAD_REQUEST).json({
           success: false,
@@ -111,7 +109,6 @@ export const uploadBookDetails = async (req: Request, res: Response) => {
       }
     }
 
-    // Resolve vendorId for physical books
     let vendorId = undefined;
     if (type === "physical") {
       const vendor = await Vendor.findOne({ userId: uploader });
@@ -125,17 +122,13 @@ export const uploadBookDetails = async (req: Request, res: Response) => {
       vendorId = vendor._id;
     }
 
-    let visibility: "public" | "pending";
+    let visibility: "public" | "pending" | "rejected";
     if (role === "admin") {
       visibility = "public";
+    } else if (type === "physical") {
+      visibility = "public";
     } else {
-      if (type === "free") {
-        visibility = "pending";
-      } else if (type === "physical") {
-        visibility = "public";
-      } else {
-        visibility = "pending";
-      }
+      visibility = "pending";
     }
 
     const book = await Book.create({
@@ -171,7 +164,7 @@ export const uploadBookDetails = async (req: Request, res: Response) => {
       success: true,
       message:
         visibility === "pending"
-          ? "Book uploaded and sent for approval"
+          ? "Book uploaded and sent for admin approval"
           : "Book uploaded successfully",
       book,
     });
@@ -184,7 +177,6 @@ export const uploadBookDetails = async (req: Request, res: Response) => {
   }
 };
 
-//get all books with filters
 export const getAllBooks = async (req: Request, res: Response) => {
   try {
     const {
@@ -212,20 +204,11 @@ export const getAllBooks = async (req: Request, res: Response) => {
 
     if (type && typeof type === "string") {
       const types = type.split(",").map((t) => t.trim());
-      if (types.length > 1) {
-        filter.type = { $in: types };
-      } else {
-        filter.type = type;
-      }
+      filter.type = types.length > 1 ? { $in: types } : type;
     }
 
-    if (availability === "in-stock") {
-      filter.stock = { $gt: 0 };
-    }
-
-    if (availability === "out-of-stock") {
-      filter.stock = { $lte: 0 };
-    }
+    if (availability === "in-stock") filter.stock = { $gt: 0 };
+    if (availability === "out-of-stock") filter.stock = { $lte: 0 };
 
     if (minPrice || maxPrice) {
       filter.price = {};
@@ -241,9 +224,7 @@ export const getAllBooks = async (req: Request, res: Response) => {
       filter.genre = { $in: genre.split(",") };
     }
 
-    if (location && typeof location === "string") {
-      filter.location = location;
-    }
+    if (location && typeof location === "string") filter.location = location;
 
     if (author && typeof author === "string") {
       filter.author = { $regex: author, $options: "i" };
@@ -259,7 +240,6 @@ export const getAllBooks = async (req: Request, res: Response) => {
     const safePage = Number(page) > 0 ? Number(page) : 1;
     const safeLimit =
       Number(limit) > 0 && Number(limit) <= 100 ? Number(limit) : 10;
-
     const skip = (safePage - 1) * safeLimit;
 
     const books = await Book.find(filter)
@@ -287,14 +267,10 @@ export const getAllBooks = async (req: Request, res: Response) => {
   }
 };
 
-//get single book details
 export const getSingleBook = async (req: Request, res: Response) => {
   try {
     const filter: any = { _id: req.params.id };
-
-    if (req.user?.role !== "admin") {
-      filter.visibility = "public";
-    }
+    if (req.user?.role !== "admin") filter.visibility = "public";
 
     const book = await Book.findOne(filter).populate(
       "uploader",
@@ -321,7 +297,6 @@ export const getSingleBook = async (req: Request, res: Response) => {
   }
 };
 
-//update book details
 export const updateBookDetails = async (req: Request, res: Response) => {
   try {
     const allowedFields = [
@@ -340,9 +315,7 @@ export const updateBookDetails = async (req: Request, res: Response) => {
 
     const updates: any = {};
     for (const field of allowedFields) {
-      if (req.body[field] !== undefined) {
-        updates[field] = req.body[field];
-      }
+      if (req.body[field] !== undefined) updates[field] = req.body[field];
     }
 
     const book = await Book.findById(req.params.id);
@@ -382,7 +355,6 @@ export const updateBookDetails = async (req: Request, res: Response) => {
   }
 };
 
-//delete book details
 export const deleteBookDetails = async (req: Request, res: Response) => {
   try {
     const book = await Book.findById(req.params.id);

@@ -332,30 +332,27 @@ export const getAllCategories = async (req: Request, res: Response) => {
 
     // const totalCategories = await Category.countDocuments();
 
-    const categories = await Category.find()
-      .sort({ name: 1 })
-      // .skip(skip)
-      // .limit(safeLimit);
+    const categories = await Category.find().sort({ name: 1 });
+    // .skip(skip)
+    // .limit(safeLimit);
 
     const bookCounts = await Book.aggregate([
-      { 
-        $match: { 
-          visibility: "public" 
-        } 
+      {
+        $match: {
+          visibility: "public",
+        },
       },
-      { 
-        $group: { 
-          _id: "$category", 
-          count: { $sum: 1 } 
-        } 
-      }
+      {
+        $group: {
+          _id: "$category",
+          count: { $sum: 1 },
+        },
+      },
     ]);
 
-    const countMap = new Map(
-      bookCounts.map(item => [item._id, item.count])
-    );
+    const countMap = new Map(bookCounts.map((item) => [item._id, item.count]));
 
-    const categoriesWithCounts = categories.map(category => ({
+    const categoriesWithCounts = categories.map((category) => ({
       _id: category._id,
       name: category.name,
       isActive: category.isActive,
@@ -395,9 +392,9 @@ export const getCategoryById = async (req: Request, res: Response) => {
       });
     }
 
-    const bookCount = await Book.countDocuments({ 
+    const bookCount = await Book.countDocuments({
       category: category.name,
-      visibility: "public"
+      visibility: "public",
     });
 
     return res.status(StatusCodes.OK).json({
@@ -488,7 +485,7 @@ export const updateCategory = async (req: Request, res: Response) => {
         message: "Category not found",
       });
     }
-    
+
     const oldName = category.name;
 
     if (name && name.trim() !== category.name) {
@@ -506,7 +503,7 @@ export const updateCategory = async (req: Request, res: Response) => {
 
       category.name = name.trim();
     }
-    
+
     if (isActive !== undefined) {
       category.isActive = isActive;
     }
@@ -516,13 +513,13 @@ export const updateCategory = async (req: Request, res: Response) => {
     if (oldName !== category.name) {
       await Book.updateMany(
         { category: oldName },
-        { $set: { category: category.name } }
+        { $set: { category: category.name } },
       );
     }
 
-    const bookCount = await Book.countDocuments({ 
+    const bookCount = await Book.countDocuments({
       category: category.name,
-      visibility: "public"
+      visibility: "public",
     });
 
     return res.status(StatusCodes.OK).json({
@@ -593,34 +590,30 @@ export const getGenres = async (req: Request, res: Response) => {
     // const safeLimit = limit < 1 ? 12 : limit > 50 ? 50 : limit;
     // const skip = (safePage - 1) * safeLimit;
 
-
     // const totalGenres = await Genre.countDocuments();
 
-    const genres = await Genre.find()
-      .sort({ name: 1 })
-      // .skip(skip)
-      // .limit(safeLimit);
+    const genres = await Genre.find().sort({ name: 1 });
+    // .skip(skip)
+    // .limit(safeLimit);
 
     const bookCounts = await Book.aggregate([
-      { 
-        $match: { 
+      {
+        $match: {
           visibility: "public",
-          genre: { $exists: true, $ne: null } 
-        } 
+          genre: { $exists: true, $ne: null },
+        },
       },
-      { 
-        $group: { 
-          _id: "$genre", 
-          count: { $sum: 1 } 
-        } 
-      }
+      {
+        $group: {
+          _id: "$genre",
+          count: { $sum: 1 },
+        },
+      },
     ]);
 
-    const countMap = new Map(
-      bookCounts.map(item => [item._id, item.count])
-    );
+    const countMap = new Map(bookCounts.map((item) => [item._id, item.count]));
 
-    const genresWithCounts = genres.map(genre => ({
+    const genresWithCounts = genres.map((genre) => ({
       _id: genre._id,
       name: genre.name,
       isActive: genre.isActive,
@@ -740,9 +733,9 @@ export const updateGenre = async (req: Request, res: Response) => {
         message: "Genre not found",
       });
     }
-    
+
     const oldName = genre.name;
-    
+
     if (name && name.trim() !== genre.name) {
       const existingGenre = await Genre.findOne({
         name: name.trim(),
@@ -769,14 +762,14 @@ export const updateGenre = async (req: Request, res: Response) => {
     if (oldName !== genre.name) {
       await Book.updateMany(
         { genre: oldName },
-        { $set: { genre: genre.name } }
+        { $set: { genre: genre.name } },
       );
     }
 
     // Get book count
-    const bookCount = await Book.countDocuments({ 
+    const bookCount = await Book.countDocuments({
       genre: genre.name,
-      visibility: "public"
+      visibility: "public",
     });
 
     return res.status(StatusCodes.OK).json({
@@ -841,10 +834,11 @@ export const moderateFreeBook = async (req: Request, res: Response) => {
     });
   }
 
-  if (book.type !== "free" && book.type !== "second-hand") {
+  if (!["free", "second-hand", "free-notes"].includes(book.type)) {
     return res.status(StatusCodes.BAD_REQUEST).json({
       success: false,
-      message: "Only free books require admin approval",
+      message:
+        "Only free, free-notes, and second-hand books require admin approval",
     });
   }
 
@@ -855,15 +849,15 @@ export const moderateFreeBook = async (req: Request, res: Response) => {
     });
   }
 
-  book.visibility = action === "approve" ? "public" : "blocked";
+  book.visibility = action === "approve" ? "public" : "rejected";
   await book.save();
 
-  res.status(StatusCodes.OK).json({
+  return res.status(StatusCodes.OK).json({
     success: true,
     message:
       action === "approve"
-        ? "Free book approved and is now public"
-        : "Free book rejected",
+        ? "Book approved and is now public"
+        : "Book rejected",
     data: book,
   });
 };
@@ -872,13 +866,13 @@ export const moderateFreeBook = async (req: Request, res: Response) => {
 export const getPendingFreeBooks = async (req: Request, res: Response) => {
   try {
     const pendingBooks = await Book.find({
-      $or: [{ type: "free" }, { type: "second-hand" }],
+      type: { $in: ["free", "second-hand", "free-notes"] },
       visibility: "pending",
-    });
+    }).populate("uploader", "name email role");
 
     return res.status(StatusCodes.OK).json({
       success: true,
-      message: "Pending free books fetched successfully",
+      message: "Pending books fetched successfully",
       data: pendingBooks,
     });
   } catch (error) {
@@ -1070,13 +1064,14 @@ export const updateAdminPassword = async (req: Request, res: Response) => {
 // Platform Stats
 export const getPlatformStats = async (req: Request, res: Response) => {
   try {
-    const dbStatus = mongoose.connection.readyState === 1 ? "Connected" : "Disconnected";
+    const dbStatus =
+      mongoose.connection.readyState === 1 ? "Connected" : "Disconnected";
     const platformVersion = process.env.PLATFORM_VERSION || "1.0.0";
 
     const uptimeSeconds = process.uptime();
-    const uptimePercentage = "99.8%"; 
+    const uptimePercentage = "99.8%";
 
-    const lastBackup = await getLastBackupTime(); 
+    const lastBackup = await getLastBackupTime();
 
     return res.status(StatusCodes.OK).json({
       success: true,
@@ -1097,4 +1092,3 @@ export const getPlatformStats = async (req: Request, res: Response) => {
     });
   }
 };
-
