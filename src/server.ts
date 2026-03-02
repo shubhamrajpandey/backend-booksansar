@@ -25,6 +25,7 @@ import orderRoutes from "./routes/order.routes";
 import payoutRoutes from "./routes/payout.routes";
 import bookSwapRoute from "./routes/bookswap.route";
 import vendorRoutes from "./routes/vendor.routes";
+import vendorInventoryRoutes from "./routes/vendor.inventory.routes";
 
 const app = express();
 
@@ -66,6 +67,7 @@ app.use("/api/orders", orderRoutes);
 app.use("/api/payouts", payoutRoutes);
 app.use("/api/swaps", bookSwapRoute);
 app.use("/api/vendor", vendorRoutes);
+app.use("/api/vendor/inventory", vendorInventoryRoutes);
 
 server.listen(PORT, () =>
   console.log(`Server running on port http://localhost:${PORT}`),
