@@ -1,6 +1,7 @@
 import { Request, Response, NextFunction } from "express";
 import jwt, { JwtPayload } from "jsonwebtoken";
 import { StatusCodes } from "http-status-codes";
+import logger from "../utils/logger";
 
 export const authenticateToken = (
   req: Request,
@@ -22,7 +23,6 @@ export const authenticateToken = (
     });
   }
 
-  
   try {
     const decoded = jwt.verify(
       token,
@@ -31,7 +31,7 @@ export const authenticateToken = (
     req.user = { id: decoded.id, role: decoded.role };
     next();
   } catch (error) {
-    console.error("JWT Verification Error:", error);
+    logger.error("JWT Verification Error");
     if (error instanceof jwt.TokenExpiredError) {
       return res.status(StatusCodes.UNAUTHORIZED).json({
         success: false,
