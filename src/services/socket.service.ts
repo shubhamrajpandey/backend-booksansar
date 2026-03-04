@@ -1,8 +1,9 @@
 import { Server, Socket } from "socket.io";
 import jwt, { JwtPayload } from "jsonwebtoken";
-import Message from "../models/message.model";
-import Conversation from "../models/conversation.model";
+import Message from "../modules/chat/models/message.model";
+import Conversation from "../modules/chat/models/conversation.model";
 import { SendMessagePayload } from "../types/chat";
+import logger from "../utils/logger";
 
 export const initSocket = (server: any) => {
   const io = new Server(server, {
@@ -30,17 +31,21 @@ export const initSocket = (server: any) => {
   });
 
   io.on("connection", (socket: Socket) => {
-    console.log("User connected:", socket.data.userId);
+    logger.info("User connected:", socket.data.userId);
     socket.join(socket.data.userId);
 
     socket.on("join-conversation", (conversationId: string) => {
       socket.join(conversationId);
-      console.log(`User ${socket.data.userId} joined conversation ${conversationId}`);
+      logger.info(
+        `User ${socket.data.userId} joined conversation ${conversationId}`,
+      );
     });
 
     socket.on("leave-conversation", (conversationId: string) => {
       socket.leave(conversationId);
-      console.log(`User ${socket.data.userId} left conversation ${conversationId}`);
+      logger.info(
+        `User ${socket.data.userId} left conversation ${conversationId}`,
+      );
     });
 
     socket.on("send-message", async (data: SendMessagePayload) => {
@@ -76,27 +81,34 @@ export const initSocket = (server: any) => {
         });
 
         io.to(data.conversationId).emit("receive-message", populatedMessage);
-        
+
         io.to(data.receiverId).emit("new-message-notification", {
           conversationId: data.conversationId,
           message: populatedMessage,
         });
 
-        const updatedConversation = await Conversation.findById(data.conversationId)
+        const updatedConversation = await Conversation.findById(
+          data.conversationId,
+        )
           .populate("participants", "name email role avatar")
           .populate("bookId", "title type coverImage price");
 
-        io.to(socket.data.userId).emit("conversation-updated", updatedConversation);
-        io.to(data.receiverId).emit("conversation-updated", updatedConversation);
-
+        io.to(socket.data.userId).emit(
+          "conversation-updated",
+          updatedConversation,
+        );
+        io.to(data.receiverId).emit(
+          "conversation-updated",
+          updatedConversation,
+        );
       } catch (error) {
-        console.error("Send message error:", error);
+        logger.error("Send message error");
         socket.emit("message-error", { error: "Failed to send message" });
       }
     });
 
     socket.on("disconnect", () => {
-      console.log("User disconnected:", socket.data.userId);
+      logger.info("User disconnected:", socket.data.userId);
     });
   });
 

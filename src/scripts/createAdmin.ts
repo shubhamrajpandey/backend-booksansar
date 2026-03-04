@@ -1,6 +1,6 @@
 import mongoose from "mongoose";
 import bcrypt from "bcrypt";
-import User from "../models/user.model";
+import User from "../modules/user/user.model";
 import "dotenv/config";
 
 const MONGO_URI = process.env.MONGO_URI!;
