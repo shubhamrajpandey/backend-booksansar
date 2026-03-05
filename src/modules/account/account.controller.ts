@@ -12,12 +12,43 @@ export const getProfile = async (req: Request, res: Response) => {
     const userId = req.user?.id;
 
     const user = await User.findById(userId).select("-password");
-    if (!user) {
-      return res.status(404).json({ message: "User not found" });
+    if (!user) return res.status(404).json({ message: "User not found" });
+
+    let stats = await ReadingStats.findOne({ userId });
+    if (!stats) stats = await ReadingStats.create({ userId });
+
+    // ── AUTO-DECAY: reset streak if user hasn't read today or yesterday ──
+    if (stats.lastReadDate && stats.currentStreak > 0) {
+      const today = Date.UTC(
+        new Date().getUTCFullYear(),
+        new Date().getUTCMonth(),
+        new Date().getUTCDate(),
+      );
+      const lastRead = Date.UTC(
+        new Date(stats.lastReadDate).getUTCFullYear(),
+        new Date(stats.lastReadDate).getUTCMonth(),
+        new Date(stats.lastReadDate).getUTCDate(),
+      );
+      const daysSince = (today - lastRead) / 86_400_000;
+
+      if (daysSince > 1) {
+        // Check streak freeze
+        if (
+          daysSince === 2 &&
+          stats.streakFreezeCount > 0 &&
+          !stats.streakFreezeUsed
+        ) {
+          stats.streakFreezeCount -= 1;
+          stats.streakFreezeUsed = true;
+        } else {
+          stats.currentStreak = 0;
+          stats.streakFreezeUsed = false;
+        }
+        await stats.save();
+      }
     }
 
-    const [stats, wishlist, cart, preferences] = await Promise.all([
-      ReadingStats.findOne({ userId }),
+    const [wishlist, cart, preferences] = await Promise.all([
       Wishlist.findOne({ userId }).populate("items.bookId"),
       Cart.findOne({ userId }).populate("items.bookId"),
       UserPreferences.findOne({ userId }),
@@ -25,15 +56,17 @@ export const getProfile = async (req: Request, res: Response) => {
 
     res.status(200).json({
       user,
-      stats: stats || {
-        booksRead: 0,
-        currentStreak: 0,
-        longestStreak: 0,
-        totalReadingTime: 0,
-        favoriteGenre: "Fiction",
-        booksThisMonth: 0,
-        pagesRead: 0,
-        monthlyGoal: 10,
+      stats: {
+        booksRead: stats.booksRead,
+        currentStreak: stats.currentStreak,
+        longestStreak: stats.longestStreak,
+        totalReadingTime: stats.totalReadingTime,
+        favoriteGenre: stats.favoriteGenre || "—",
+        booksThisMonth: stats.booksThisMonth,
+        pagesRead: stats.pagesRead,
+        monthlyGoal: stats.monthlyGoal,
+        lastReadDate: stats.lastReadDate,
+        streakFreezeCount: stats.streakFreezeCount,
       },
       wishlistCount: wishlist?.items.length || 0,
       cartCount: cart?.items.length || 0,
