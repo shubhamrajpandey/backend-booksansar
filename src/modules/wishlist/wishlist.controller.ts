@@ -1,13 +1,19 @@
 import { Request, Response } from "express";
 import Wishlist from "./wishlist.model";
 import Book from "../book/book.model";
+import logger from "../../utils/logger";
+
+const BOOK_FIELDS = "title author coverImage additionalImages price";
 
 // Get user's wishlist
 export const getWishlist = async (req: Request, res: Response) => {
   try {
     const userId = req.user?.id;
 
-    let wishlist = await Wishlist.findOne({ userId }).populate("items.bookId");
+    let wishlist = await Wishlist.findOne({ userId }).populate(
+      "items.bookId",
+      BOOK_FIELDS,
+    );
 
     if (!wishlist) {
       wishlist = await Wishlist.create({ userId, items: [] });
@@ -15,7 +21,7 @@ export const getWishlist = async (req: Request, res: Response) => {
 
     res.status(200).json({ wishlist });
   } catch (error) {
-    console.error("Get wishlist error:", error);
+    logger.error("Get wishlist error:");
     res.status(500).json({ message: "Server error" });
   }
 };
@@ -49,26 +55,22 @@ export const addToWishlist = async (req: Request, res: Response) => {
       return res.status(400).json({ message: "Book already in wishlist" });
     }
 
-    wishlist.items.push({
-      bookId,
-      addedAt: new Date(),
-    });
-
+    wishlist.items.push({ bookId, addedAt: new Date() });
     await wishlist.save();
 
-    wishlist = await Wishlist.findById(wishlist._id).populate("items.bookId");
+    wishlist = await Wishlist.findById(wishlist._id).populate(
+      "items.bookId",
+      BOOK_FIELDS,
+    );
 
-    res.status(200).json({
-      message: "Item added to wishlist",
-      wishlist,
-    });
+    res.status(200).json({ message: "Item added to wishlist", wishlist });
   } catch (error) {
-    console.error("Add to wishlist error:", error);
+    logger.error("Add to wishlist error:");
     res.status(500).json({ message: "Server error" });
   }
 };
 
-//Remove item from wishlist
+// Remove item from wishlist
 export const removeFromWishlist = async (req: Request, res: Response) => {
   try {
     const userId = req.user?.id;
@@ -83,11 +85,11 @@ export const removeFromWishlist = async (req: Request, res: Response) => {
     wishlist.items = wishlist.items.filter(
       (item) => item.bookId.toString() !== bookId,
     );
-
     await wishlist.save();
 
     const updatedWishlist = await Wishlist.findById(wishlist._id).populate(
       "items.bookId",
+      BOOK_FIELDS,
     );
 
     res.status(200).json({
@@ -95,7 +97,7 @@ export const removeFromWishlist = async (req: Request, res: Response) => {
       wishlist: updatedWishlist,
     });
   } catch (error) {
-    console.error("Remove from wishlist error:", error);
+    logger.error("Remove from wishlist error:");
     res.status(500).json({ message: "Server error" });
   }
 };
@@ -114,17 +116,14 @@ export const clearWishlist = async (req: Request, res: Response) => {
     wishlist.items = [];
     await wishlist.save();
 
-    res.status(200).json({
-      message: "Wishlist cleared",
-      wishlist,
-    });
+    res.status(200).json({ message: "Wishlist cleared", wishlist });
   } catch (error) {
-    console.error("Clear wishlist error:", error);
+    logger.error("Clear wishlist error:");
     res.status(500).json({ message: "Server error" });
   }
 };
 
-//  Check if book is in wishlist
+// Check if book is in wishlist
 export const checkWishlist = async (req: Request, res: Response) => {
   try {
     const userId = req.user?.id;
@@ -142,7 +141,7 @@ export const checkWishlist = async (req: Request, res: Response) => {
 
     res.status(200).json({ inWishlist: exists });
   } catch (error) {
-    console.error("Check wishlist error:", error);
+    logger.error("Check wishlist error:");
     res.status(500).json({ message: "Server error" });
   }
 };

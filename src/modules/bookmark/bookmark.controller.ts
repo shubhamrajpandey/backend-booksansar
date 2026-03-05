@@ -20,11 +20,9 @@ export const toggleBookmark = async (req: Request, res: Response) => {
       });
     }
 
-    // Check if bookmark exists
     const existingBookmark = await Bookmark.findOne({ userId, bookId });
 
     if (existingBookmark) {
-      // Remove bookmark
       await Bookmark.findByIdAndDelete(existingBookmark._id);
       return res.status(200).json({
         success: true,
@@ -32,7 +30,6 @@ export const toggleBookmark = async (req: Request, res: Response) => {
         isBookmarked: false,
       });
     } else {
-      // Add bookmark
       const newBookmark = await Bookmark.create({ userId, bookId });
       return res.status(201).json({
         success: true,
@@ -63,7 +60,10 @@ export const getUserBookmarks = async (req: Request, res: Response) => {
     }
 
     const bookmarks = await Bookmark.find({ userId })
-      .populate("bookId", "title author thumbnail pdfUrl price")
+      .populate(
+        "bookId",
+        "title author coverImage additionalImages thumbnail pdfUrl price",
+      ) // ✅ added coverImage + additionalImages
       .sort({ createdAt: -1 });
 
     return res.status(200).json({
