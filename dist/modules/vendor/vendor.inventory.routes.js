@@ -1,0 +1,13 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+const express_1 = require("express");
+const vendor_inventory_controller_1 = require("./vendor.inventory.controller");
+const auth_middleware_1 = require("../../middlewares/auth.middleware");
+const role_middleware_1 = require("../../middlewares/role.middleware");
+const router = (0, express_1.Router)();
+router.use(auth_middleware_1.authenticateToken);
+router.use((0, role_middleware_1.verifyRole)("vendor"));
+router.get("/", vendor_inventory_controller_1.getVendorInventory);
+router.patch("/:id", vendor_inventory_controller_1.updateVendorBook);
+router.delete("/:id", vendor_inventory_controller_1.deleteVendorBook);
+exports.default = router;

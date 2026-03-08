@@ -23,6 +23,7 @@ import bookSwapRoute from "./modules/bookswap/bookswap.routes";
 import vendorRoutes from "./modules/vendor/vendor.routes";
 import vendorInventoryRoutes from "./modules/vendor/vendor.inventory.routes";
 import readingStatsRoutes from "./modules/readingstats/readingstats.routes";
+import notificationRoutes from "./modules/notification/notification.routes";
 
 const app = express();
 const v1Router = Router();
@@ -60,6 +61,7 @@ v1Router.use("/swaps", bookSwapRoute);
 v1Router.use("/vendor", vendorRoutes);
 v1Router.use("/vendor/inventory", vendorInventoryRoutes);
 v1Router.use("/reading-stats", readingStatsRoutes);
+v1Router.use("/notifications", notificationRoutes);
 
 app.use("/api/v1", v1Router);
 

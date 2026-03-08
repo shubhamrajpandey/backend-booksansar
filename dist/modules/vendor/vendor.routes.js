@@ -1,0 +1,12 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+const express_1 = require("express");
+const vendor_controller_1 = require("./vendor.controller");
+const auth_middleware_1 = require("../../middlewares/auth.middleware");
+const router = (0, express_1.Router)();
+router.use(auth_middleware_1.authenticateToken);
+router.get("/profile", vendor_controller_1.getVendorProfile);
+router.patch("/profile", vendor_controller_1.updateVendorProfile);
+router.patch("/password", vendor_controller_1.updateVendorPassword);
+router.get("/billing", vendor_controller_1.getVendorBilling);
+exports.default = router;
