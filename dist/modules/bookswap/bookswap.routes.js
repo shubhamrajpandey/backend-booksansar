@@ -1,0 +1,17 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+const express_1 = require("express");
+const auth_middleware_1 = require("../../middlewares/auth.middleware");
+const role_middleware_1 = require("../../middlewares/role.middleware");
+const bookswap_controller_1 = require("./bookswap.controller");
+const router = (0, express_1.Router)();
+router.get("/", bookswap_controller_1.getAllSwaps);
+router.get("/:id", bookswap_controller_1.getSingleSwap);
+router.post("/", auth_middleware_1.authenticateToken, (0, role_middleware_1.verifyRole)("learner", "vendor", "admin"), bookswap_controller_1.createSwap);
+router.get("/my/listings", auth_middleware_1.authenticateToken, (0, role_middleware_1.verifyRole)("learner", "vendor", "admin"), bookswap_controller_1.getMySwaps);
+router.patch("/:id", auth_middleware_1.authenticateToken, (0, role_middleware_1.verifyRole)("learner", "vendor", "admin"), bookswap_controller_1.updateSwap);
+router.delete("/:id", auth_middleware_1.authenticateToken, (0, role_middleware_1.verifyRole)("learner", "vendor", "admin"), bookswap_controller_1.deleteSwap);
+router.post("/:id/propose", auth_middleware_1.authenticateToken, (0, role_middleware_1.verifyRole)("learner", "vendor", "admin"), bookswap_controller_1.proposeSwap);
+router.patch("/:id/proposals/:proposalId", auth_middleware_1.authenticateToken, (0, role_middleware_1.verifyRole)("learner", "vendor", "admin"), bookswap_controller_1.respondToProposal);
+router.get("/admin/all", auth_middleware_1.authenticateToken, (0, role_middleware_1.verifyRole)("admin"), bookswap_controller_1.getAllSwapsAdmin);
+exports.default = router;

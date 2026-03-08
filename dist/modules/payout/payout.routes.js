@@ -1,0 +1,13 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+const express_1 = require("express");
+const payout_controller_1 = require("./payout.controller");
+const auth_middleware_1 = require("../../middlewares/auth.middleware");
+const role_middleware_1 = require("../../middlewares/role.middleware");
+const router = (0, express_1.Router)();
+router.post("/request", auth_middleware_1.authenticateToken, (0, role_middleware_1.verifyRole)("vendor"), payout_controller_1.requestPayout);
+router.get("/my", auth_middleware_1.authenticateToken, (0, role_middleware_1.verifyRole)("vendor"), payout_controller_1.getMyPayouts);
+router.get("/admin/stats", auth_middleware_1.authenticateToken, (0, role_middleware_1.verifyRole)("admin"), payout_controller_1.getPayoutStats);
+router.get("/admin/all", auth_middleware_1.authenticateToken, (0, role_middleware_1.verifyRole)("admin"), payout_controller_1.getAllPayouts);
+router.patch("/admin/:payoutId/status", auth_middleware_1.authenticateToken, (0, role_middleware_1.verifyRole)("admin"), payout_controller_1.updatePayoutStatus);
+exports.default = router;

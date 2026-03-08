@@ -1,0 +1,11 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+const express_1 = require("express");
+const chat_controller_1 = require("./chat.controller");
+const auth_middleware_1 = require("../../middlewares/auth.middleware");
+const router = (0, express_1.Router)();
+router.post("/conversation", auth_middleware_1.authenticateToken, chat_controller_1.createOrGetConversation);
+router.get("/conversations", auth_middleware_1.authenticateToken, chat_controller_1.getUserConversations);
+router.get("/messages/:conversationId", auth_middleware_1.authenticateToken, chat_controller_1.getMessages);
+router.delete("/conversation/:conversationId", auth_middleware_1.authenticateToken, chat_controller_1.deleteConversation);
+exports.default = router;
