@@ -1,6 +1,6 @@
 import { StatusCodes } from "http-status-codes";
 import { Request, Response } from "express";
-import Book from "./book.model";
+import Book from "../book/book.model";
 import Vendor from "../vendor/vendor.model";
 import logger from "../../utils/logger";
 
@@ -70,6 +70,7 @@ export const uploadBookDetails = async (req: Request, res: Response) => {
       });
     }
 
+    // Both free and free-notes require a PDF
     if (type === "free" || type === "free-notes") {
       if (!pdfUrl) {
         return res.status(StatusCodes.BAD_REQUEST).json({
@@ -123,13 +124,17 @@ export const uploadBookDetails = async (req: Request, res: Response) => {
       vendorId = vendor._id;
     }
 
+    // Visibility logic:
+    // - admin → always public
+    // - physical → public (vendor-approved flow)
+    // - free, free-notes, second-hand → pending (needs admin approval)
     let visibility: "public" | "pending" | "rejected";
     if (role === "admin") {
       visibility = "public";
     } else if (type === "physical") {
       visibility = "public";
     } else {
-      visibility = "pending";
+      visibility = "pending"; // free, free-notes, second-hand all need approval
     }
 
     const book = await Book.create({
@@ -170,7 +175,7 @@ export const uploadBookDetails = async (req: Request, res: Response) => {
       book,
     });
   } catch (error: any) {
-    logger.error("UPLOAD BOOK ERROR:", error);
+    console.error("UPLOAD BOOK ERROR:", error);
     return res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({
       success: false,
       message: "Failed to upload book",
@@ -384,6 +389,53 @@ export const deleteBookDetails = async (req: Request, res: Response) => {
       message: "Book deleted successfully",
     });
   } catch (error) {
+    return res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({
+      success: false,
+      message: "Server error",
+    });
+  }
+};
+
+export const getMyBooks = async (req: Request, res: Response) => {
+  try {
+    if (!req.user) {
+      return res.status(StatusCodes.UNAUTHORIZED).json({
+        success: false,
+        message: "Authentication required",
+      });
+    }
+
+    const { type, page = 1, limit = 20 } = req.query;
+
+    const filter: any = { uploader: req.user.id };
+
+    if (type && typeof type === "string") {
+      filter.type = type;
+    }
+
+    const safePage = Number(page) > 0 ? Number(page) : 1;
+    const safeLimit =
+      Number(limit) > 0 && Number(limit) <= 100 ? Number(limit) : 20;
+    const skip = (safePage - 1) * safeLimit;
+
+    const books = await Book.find(filter)
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(safeLimit);
+
+    const total = await Book.countDocuments(filter);
+
+    return res.status(StatusCodes.OK).json({
+      success: true,
+      message: "Your books retrieved successfully",
+      page: safePage,
+      limit: safeLimit,
+      total,
+      totalPages: Math.ceil(total / safeLimit),
+      books,
+    });
+  } catch (error) {
+    logger.error("GET MY BOOKS ERROR:");
     return res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({
       success: false,
       message: "Server error",

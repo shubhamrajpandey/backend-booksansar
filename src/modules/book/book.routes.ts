@@ -7,6 +7,7 @@ import {
   getSingleBook,
   updateBookDetails,
   deleteBookDetails,
+  getMyBooks,
 } from "./book.controller";
 
 const router = Router();
@@ -19,6 +20,8 @@ router.post(
 );
 
 router.get("/", getAllBooks);
+
+router.get("/my-books", authenticateToken, getMyBooks);
 
 router.get("/:id", getSingleBook);
 
@@ -35,4 +38,5 @@ router.delete(
   verifyRole("admin"),
   deleteBookDetails,
 );
+
 export default router;
