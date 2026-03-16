@@ -196,6 +196,7 @@ export const getAllBooks = async (req: Request, res: Response) => {
       maxPrice,
       availability,
       visibility,
+      sortBy,
       page = 1,
       limit = 10,
     } = req.query;
@@ -243,6 +244,35 @@ export const getAllBooks = async (req: Request, res: Response) => {
       ];
     }
 
+    let sort: Record<string, 1 | -1> = { createdAt: -1 };
+
+    if (sortBy && typeof sortBy === "string") {
+      switch (sortBy) {
+        case "price-low-high":
+          sort = { price: 1 };
+          break;
+        case "price-high-low":
+          sort = { price: -1 };
+          break;
+        case "rating-high-low":
+          sort = { rating: -1 };
+          break;
+        case "newest":
+          sort = { createdAt: -1 };
+          break;
+        case "title-a-z":
+          sort = { title: 1 };
+          break;
+        case "title-z-a":
+          sort = { title: -1 };
+          break;
+        case "relevance":
+        default:
+          sort = { createdAt: -1 };
+          break;
+      }
+    }
+
     const safePage = Number(page) > 0 ? Number(page) : 1;
     const safeLimit =
       Number(limit) > 0 && Number(limit) <= 100 ? Number(limit) : 10;
@@ -250,7 +280,7 @@ export const getAllBooks = async (req: Request, res: Response) => {
 
     const books = await Book.find(filter)
       .populate("uploader", "name email role")
-      .sort({ createdAt: -1 })
+      .sort(sort)
       .skip(skip)
       .limit(safeLimit);
 
