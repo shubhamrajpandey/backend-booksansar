@@ -7,6 +7,7 @@ const book_controller_1 = require("./book.controller");
 const router = (0, express_1.Router)();
 router.post("/", auth_middleware_1.authenticateToken, (0, role_middleware_1.verifyRole)("vendor", "learner", "admin"), book_controller_1.uploadBookDetails);
 router.get("/", book_controller_1.getAllBooks);
+router.get("/my-books", auth_middleware_1.authenticateToken, book_controller_1.getMyBooks);
 router.get("/:id", book_controller_1.getSingleBook);
 router.patch("/:id", auth_middleware_1.authenticateToken, (0, role_middleware_1.verifyRole)("vendor", "learner", "admin"), book_controller_1.updateBookDetails);
 router.delete("/:id", auth_middleware_1.authenticateToken, (0, role_middleware_1.verifyRole)("admin"), book_controller_1.deleteBookDetails);

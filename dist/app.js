@@ -60,6 +60,7 @@ const bookswap_routes_1 = __importDefault(require("./modules/bookswap/bookswap.r
 const vendor_routes_1 = __importDefault(require("./modules/vendor/vendor.routes"));
 const vendor_inventory_routes_1 = __importDefault(require("./modules/vendor/vendor.inventory.routes"));
 const readingstats_routes_2 = __importDefault(require("./modules/readingstats/readingstats.routes"));
+const notification_routes_1 = __importDefault(require("./modules/notification/notification.routes"));
 const app = (0, express_1.default)();
 const v1Router = (0, express_1.Router)();
 app.use((0, cors_1.default)({
@@ -91,5 +92,6 @@ v1Router.use("/swaps", bookswap_routes_1.default);
 v1Router.use("/vendor", vendor_routes_1.default);
 v1Router.use("/vendor/inventory", vendor_inventory_routes_1.default);
 v1Router.use("/reading-stats", readingstats_routes_2.default);
+v1Router.use("/notifications", notification_routes_1.default);
 app.use("/api/v1", v1Router);
 exports.default = app;

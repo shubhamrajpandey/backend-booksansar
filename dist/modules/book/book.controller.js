@@ -3,9 +3,9 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.deleteBookDetails = exports.updateBookDetails = exports.getSingleBook = exports.getAllBooks = exports.uploadBookDetails = void 0;
+exports.getMyBooks = exports.deleteBookDetails = exports.updateBookDetails = exports.getSingleBook = exports.getAllBooks = exports.uploadBookDetails = void 0;
 const http_status_codes_1 = require("http-status-codes");
-const book_model_1 = __importDefault(require("./book.model"));
+const book_model_1 = __importDefault(require("../book/book.model"));
 const vendor_model_1 = __importDefault(require("../vendor/vendor.model"));
 const logger_1 = __importDefault(require("../../utils/logger"));
 const uploadBookDetails = async (req, res) => {
@@ -43,6 +43,7 @@ const uploadBookDetails = async (req, res) => {
                 message: "Only learners or admins can upload second-hand books",
             });
         }
+        // Both free and free-notes require a PDF
         if (type === "free" || type === "free-notes") {
             if (!pdfUrl) {
                 return res.status(http_status_codes_1.StatusCodes.BAD_REQUEST).json({
@@ -90,6 +91,10 @@ const uploadBookDetails = async (req, res) => {
             }
             vendorId = vendor._id;
         }
+        // Visibility logic:
+        // - admin → always public
+        // - physical → public (vendor-approved flow)
+        // - free, free-notes, second-hand → pending (needs admin approval)
         let visibility;
         if (role === "admin") {
             visibility = "public";
@@ -98,7 +103,7 @@ const uploadBookDetails = async (req, res) => {
             visibility = "public";
         }
         else {
-            visibility = "pending";
+            visibility = "pending"; // free, free-notes, second-hand all need approval
         }
         const book = await book_model_1.default.create({
             type,
@@ -137,7 +142,7 @@ const uploadBookDetails = async (req, res) => {
         });
     }
     catch (error) {
-        logger_1.default.error("UPLOAD BOOK ERROR:", error);
+        console.error("UPLOAD BOOK ERROR:", error);
         return res.status(http_status_codes_1.StatusCodes.INTERNAL_SERVER_ERROR).json({
             success: false,
             message: "Failed to upload book",
@@ -147,7 +152,7 @@ const uploadBookDetails = async (req, res) => {
 exports.uploadBookDetails = uploadBookDetails;
 const getAllBooks = async (req, res) => {
     try {
-        const { search, type, category, genre, location, author, minPrice, maxPrice, availability, visibility, page = 1, limit = 10, } = req.query;
+        const { search, type, category, genre, location, author, minPrice, maxPrice, availability, visibility, sortBy, page = 1, limit = 10, } = req.query;
         const filter = {};
         if (req.user?.role === "admin" && visibility) {
             filter.visibility = visibility;
@@ -187,12 +192,39 @@ const getAllBooks = async (req, res) => {
                 { author: { $regex: search, $options: "i" } },
             ];
         }
+        let sort = { createdAt: -1 };
+        if (sortBy && typeof sortBy === "string") {
+            switch (sortBy) {
+                case "price-low-high":
+                    sort = { price: 1 };
+                    break;
+                case "price-high-low":
+                    sort = { price: -1 };
+                    break;
+                case "rating-high-low":
+                    sort = { rating: -1 };
+                    break;
+                case "newest":
+                    sort = { createdAt: -1 };
+                    break;
+                case "title-a-z":
+                    sort = { title: 1 };
+                    break;
+                case "title-z-a":
+                    sort = { title: -1 };
+                    break;
+                case "relevance":
+                default:
+                    sort = { createdAt: -1 };
+                    break;
+            }
+        }
         const safePage = Number(page) > 0 ? Number(page) : 1;
         const safeLimit = Number(limit) > 0 && Number(limit) <= 100 ? Number(limit) : 10;
         const skip = (safePage - 1) * safeLimit;
         const books = await book_model_1.default.find(filter)
             .populate("uploader", "name email role")
-            .sort({ createdAt: -1 })
+            .sort(sort)
             .skip(skip)
             .limit(safeLimit);
         const total = await book_model_1.default.countDocuments(filter);
@@ -322,3 +354,43 @@ const deleteBookDetails = async (req, res) => {
     }
 };
 exports.deleteBookDetails = deleteBookDetails;
+const getMyBooks = async (req, res) => {
+    try {
+        if (!req.user) {
+            return res.status(http_status_codes_1.StatusCodes.UNAUTHORIZED).json({
+                success: false,
+                message: "Authentication required",
+            });
+        }
+        const { type, page = 1, limit = 20 } = req.query;
+        const filter = { uploader: req.user.id };
+        if (type && typeof type === "string") {
+            filter.type = type;
+        }
+        const safePage = Number(page) > 0 ? Number(page) : 1;
+        const safeLimit = Number(limit) > 0 && Number(limit) <= 100 ? Number(limit) : 20;
+        const skip = (safePage - 1) * safeLimit;
+        const books = await book_model_1.default.find(filter)
+            .sort({ createdAt: -1 })
+            .skip(skip)
+            .limit(safeLimit);
+        const total = await book_model_1.default.countDocuments(filter);
+        return res.status(http_status_codes_1.StatusCodes.OK).json({
+            success: true,
+            message: "Your books retrieved successfully",
+            page: safePage,
+            limit: safeLimit,
+            total,
+            totalPages: Math.ceil(total / safeLimit),
+            books,
+        });
+    }
+    catch (error) {
+        logger_1.default.error("GET MY BOOKS ERROR:");
+        return res.status(http_status_codes_1.StatusCodes.INTERNAL_SERVER_ERROR).json({
+            success: false,
+            message: "Server error",
+        });
+    }
+};
+exports.getMyBooks = getMyBooks;
