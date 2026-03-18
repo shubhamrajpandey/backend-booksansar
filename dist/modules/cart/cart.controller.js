@@ -46,7 +46,7 @@ const addToCart = async (req, res) => {
             cart.items.push({
                 bookId,
                 quantity,
-                price: book.price,
+                price: book.price ?? 0, // ← only change
                 addedAt: new Date(),
             });
         }
