@@ -4,14 +4,12 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 const nodemailer_1 = __importDefault(require("nodemailer"));
-const dotenv_1 = __importDefault(require("dotenv"));
-dotenv_1.default.config();
 const transport = nodemailer_1.default.createTransport({
     service: "gmail",
     auth: {
         user: process.env.GMAIL_USER,
         pass: process.env.GMAIL_PASS,
-    }
+    },
 });
 const sendEmail = async (to, subject, text, html) => {
     try {
@@ -20,7 +18,7 @@ const sendEmail = async (to, subject, text, html) => {
             to,
             subject,
             text,
-            html: html || `<p>${text}</p>`
+            html: html || `<p>${text}</p>`,
         });
         console.log("Email sent successfully:", info.messageId);
         return info;
