@@ -1,8 +1,7 @@
 import mongoose from "mongoose";
-import dotenv from "dotenv";
+
 import logger from "../utils/logger";
 
-dotenv.config();
 const MONGO_URI: string = process.env.MONGO_URI || "";
 
 if (!MONGO_URI) {

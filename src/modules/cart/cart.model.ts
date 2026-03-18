@@ -37,7 +37,7 @@ const cartItemSchema = new Schema(
       default: Date.now,
     },
   },
-  { _id: false }
+  { _id: false },
 );
 
 const cartSchema = new Schema<ICart>(
@@ -46,23 +46,21 @@ const cartSchema = new Schema<ICart>(
       type: Schema.Types.ObjectId,
       ref: "User",
       required: true,
-      unique: true, // ← this already creates index
+      unique: true,
     },
-
     items: [cartItemSchema],
-
     totalAmount: {
       type: Number,
       default: 0,
     },
   },
-  { timestamps: true }
+  { timestamps: true },
 );
 
 cartSchema.pre("save", function (next) {
   this.totalAmount = this.items.reduce(
     (total, item) => total + item.price * item.quantity,
-    0
+    0,
   );
   next();
 });

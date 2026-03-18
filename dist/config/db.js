@@ -4,9 +4,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 const mongoose_1 = __importDefault(require("mongoose"));
-const dotenv_1 = __importDefault(require("dotenv"));
 const logger_1 = __importDefault(require("../utils/logger"));
-dotenv_1.default.config();
 const MONGO_URI = process.env.MONGO_URI || "";
 if (!MONGO_URI) {
     logger_1.default.error("MONGO_URI is not found in the .env file.");
