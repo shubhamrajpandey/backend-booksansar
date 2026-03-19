@@ -20,11 +20,16 @@ import {
   addGenre,
   updateGenre,
   deleteGenre,
-  // Dashboard functions
   getAdminDashboardStats,
   getAdminRevenueChart,
   getAdminKYCStatus,
   getAdminOrderStatus,
+  getAdminSalesTrend,
+  getAdminTopVendors,
+  getAdminTopBooks,
+  getAdminPlatformSummary,
+  getAdminCategoryPerformance,
+  getAdminUserGrowth,
 } from "./admin.controller";
 import { verifyRole } from "../../middlewares/role.middleware";
 import { authenticateToken } from "../../middlewares/auth.middleware";
@@ -32,11 +37,9 @@ import { getPendingFreeBooks } from "./admin.controller";
 
 const router = Router();
 
-// ==================== USER ROUTES ====================
 router.get("/users", authenticateToken, verifyRole("admin"), getAllUsers);
 router.delete("/users/:id", authenticateToken, verifyRole("admin"), deleteUser);
 
-// ==================== VENDOR ROUTES ====================
 router.get(
   "/vendors/:id/details",
   authenticateToken,
@@ -58,7 +61,6 @@ router.patch(
   updateUserAccountStatus,
 );
 
-// ==================== ADMIN PROFILE ROUTES ====================
 router.get("/profile", authenticateToken, verifyRole("admin"), getAdminProfile);
 router.put(
   "/profile",
@@ -73,7 +75,6 @@ router.put(
   updateAdminPassword,
 );
 
-// ==================== PLATFORM STATS ROUTES ====================
 router.get(
   "/platform/stats",
   authenticateToken,
@@ -81,7 +82,6 @@ router.get(
   getPlatformStats,
 );
 
-// ==================== DASHBOARD ROUTES (NEW) ====================
 router.get(
   "/dashboard/stats",
   authenticateToken,
@@ -110,7 +110,6 @@ router.get(
   getAdminOrderStatus,
 );
 
-// ==================== CATEGORY ROUTES ====================
 router.get("/active", getActiveCategories);
 router.get("/categories", getAllCategories);
 router.get("/categories/:id", getCategoryById);
@@ -128,7 +127,6 @@ router.delete(
   deleteCategory,
 );
 
-// ==================== GENRE ROUTES ====================
 router.get("/genres", getGenres);
 router.post("/genres", authenticateToken, verifyRole("admin"), addGenre);
 router.put("/genres/:id", authenticateToken, verifyRole("admin"), updateGenre);
@@ -139,7 +137,6 @@ router.delete(
   deleteGenre,
 );
 
-// ==================== BOOK MODERATION ROUTES ====================
 router.patch(
   "/books/:id/moderate",
   authenticateToken,
@@ -152,6 +149,43 @@ router.get(
   authenticateToken,
   verifyRole("admin"),
   getPendingFreeBooks,
+);
+
+router.get(
+  "/reports/sales-trend",
+  authenticateToken,
+  verifyRole("admin"),
+  getAdminSalesTrend,
+);
+router.get(
+  "/reports/top-vendors",
+  authenticateToken,
+  verifyRole("admin"),
+  getAdminTopVendors,
+);
+router.get(
+  "/reports/top-books",
+  authenticateToken,
+  verifyRole("admin"),
+  getAdminTopBooks,
+);
+router.get(
+  "/reports/platform-summary",
+  authenticateToken,
+  verifyRole("admin"),
+  getAdminPlatformSummary,
+);
+router.get(
+  "/reports/category-performance",
+  authenticateToken,
+  verifyRole("admin"),
+  getAdminCategoryPerformance,
+);
+router.get(
+  "/reports/user-growth",
+  authenticateToken,
+  verifyRole("admin"),
+  getAdminUserGrowth,
 );
 
 export default router;
