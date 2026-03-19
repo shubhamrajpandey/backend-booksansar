@@ -24,6 +24,8 @@ import vendorRoutes from "./modules/vendor/vendor.routes";
 import vendorInventoryRoutes from "./modules/vendor/vendor.inventory.routes";
 import readingStatsRoutes from "./modules/readingstats/readingstats.routes";
 import notificationRoutes from "./modules/notification/notification.routes";
+import vendorDashboardRoutes from "./modules/vendor/vendor.dashboard.routes";
+import adminDashboardRoutes from "./modules/admin/admin.dashboard.routes.addition";
 
 const app = express();
 const v1Router = Router();
@@ -62,6 +64,8 @@ v1Router.use("/vendor", vendorRoutes);
 v1Router.use("/vendor/inventory", vendorInventoryRoutes);
 v1Router.use("/reading-stats", readingStatsRoutes);
 v1Router.use("/notifications", notificationRoutes);
+v1Router.use("/vendor/dashboard", vendorDashboardRoutes);
+v1Router.use("/admin/dashboard", adminDashboardRoutes);
 
 app.use("/api/v1", v1Router);
 
