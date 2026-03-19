@@ -1301,3 +1301,368 @@ export const getAdminOrderStatus = async (req: Request, res: Response) => {
     });
   }
 };
+
+export const getAdminSalesTrend = async (req: Request, res: Response) => {
+  try {
+    const sixMonthsAgo = new Date();
+    sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
+
+    const salesTrendData = await Order.aggregate([
+      {
+        $match: {
+          status: "delivered",
+          createdAt: { $gte: sixMonthsAgo },
+        },
+      },
+      {
+        $group: {
+          _id: {
+            $dateToString: { format: "%Y-%m", date: "$createdAt" },
+          },
+          sales: { $sum: "$totalAmount" },
+          orders: { $sum: 1 },
+        },
+      },
+      {
+        $sort: { _id: 1 },
+      },
+      {
+        $project: {
+          month: {
+            $dateToString: {
+              format: "%b",
+              date: {
+                $dateFromString: { dateString: { $concat: ["$_id", "-01"] } },
+              },
+            },
+          },
+          sales: 1,
+          orders: 1,
+        },
+      },
+    ]);
+
+    return res.status(StatusCodes.OK).json({
+      success: true,
+      data: salesTrendData.map((item) => ({
+        month: item.month,
+        sales: Math.round(item.sales),
+        orders: item.orders,
+      })),
+    });
+  } catch (error) {
+    console.error("Get sales trend error:", error);
+    return res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({
+      success: false,
+      message: "Server error",
+    });
+  }
+};
+
+// GET /admin/reports/top-vendors
+export const getAdminTopVendors = async (req: Request, res: Response) => {
+  try {
+    const limit = Number(req.query.limit) || 5;
+
+    const topVendors = await Order.aggregate([
+      {
+        $match: {
+          status: "delivered",
+        },
+      },
+      {
+        $unwind: "$items",
+      },
+      {
+        $group: {
+          _id: "$items.vendorId",
+          sales: { $sum: "$items.price" },
+          orders: { $sum: 1 },
+        },
+      },
+      {
+        $sort: { sales: -1 },
+      },
+      {
+        $limit: limit,
+      },
+      {
+        $lookup: {
+          from: "vendors",
+          localField: "_id",
+          foreignField: "_id",
+          as: "vendorDetails",
+        },
+      },
+      {
+        $unwind: "$vendorDetails",
+      },
+      {
+        $project: {
+          vendor: "$vendorDetails.storeName",
+          sales: 1,
+          orders: 1,
+        },
+      },
+    ]);
+
+    return res.status(StatusCodes.OK).json({
+      success: true,
+      data: topVendors.map((item) => ({
+        vendor: item.vendor,
+        sales: Math.round(item.sales),
+        orders: item.orders,
+      })),
+    });
+  } catch (error) {
+    console.error("Get top vendors error:", error);
+    return res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({
+      success: false,
+      message: "Server error",
+    });
+  }
+};
+
+// GET /admin/reports/top-books
+export const getAdminTopBooks = async (req: Request, res: Response) => {
+  try {
+    const limit = Number(req.query.limit) || 5;
+
+    const topBooks = await Order.aggregate([
+      {
+        $match: {
+          status: "delivered",
+        },
+      },
+      {
+        $unwind: "$items",
+      },
+      {
+        $group: {
+          _id: "$items.bookId",
+          sales: { $sum: "$items.quantity" },
+          revenue: { $sum: "$items.price" },
+        },
+      },
+      {
+        $sort: { sales: -1 },
+      },
+      {
+        $limit: limit,
+      },
+      {
+        $lookup: {
+          from: "books",
+          localField: "_id",
+          foreignField: "_id",
+          as: "bookDetails",
+        },
+      },
+      {
+        $unwind: "$bookDetails",
+      },
+      {
+        $project: {
+          title: "$bookDetails.title",
+          sales: 1,
+          revenue: 1,
+        },
+      },
+    ]);
+
+    return res.status(StatusCodes.OK).json({
+      success: true,
+      data: topBooks.map((item) => ({
+        title: item.title.substring(0, 30), // Truncate long titles
+        sales: item.sales,
+        revenue: Math.round(item.revenue),
+      })),
+    });
+  } catch (error) {
+    console.error("Get top books error:", error);
+    return res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({
+      success: false,
+      message: "Server error",
+    });
+  }
+};
+
+// GET /admin/reports/platform-summary
+export const getAdminPlatformSummary = async (req: Request, res: Response) => {
+  try {
+    // Total Users
+    const totalUsers = await User.countDocuments();
+
+    // Total Orders
+    const totalOrders = await Order.countDocuments();
+
+    // Total Books
+    const totalBooks = await Book.countDocuments({
+      visibility: { $in: ["public", "pending"] },
+    });
+
+    // Average Order Value
+    const avgOrderResult = await Order.aggregate([
+      {
+        $match: {
+          status: "delivered",
+        },
+      },
+      {
+        $group: {
+          _id: null,
+          avgOrderValue: { $avg: "$totalAmount" },
+        },
+      },
+    ]);
+
+    const avgOrderValue = avgOrderResult[0]?.avgOrderValue || 0;
+
+    // Total Revenue
+    const totalRevenueResult = await Order.aggregate([
+      {
+        $match: {
+          status: "delivered",
+        },
+      },
+      {
+        $group: {
+          _id: null,
+          totalRevenue: { $sum: "$totalAmount" },
+        },
+      },
+    ]);
+
+    const totalRevenue = totalRevenueResult[0]?.totalRevenue || 0;
+
+    // Platform Commission (12%)
+    const platformCommission = totalRevenue * 0.12;
+
+    return res.status(StatusCodes.OK).json({
+      success: true,
+      data: {
+        totalUsers,
+        totalOrders,
+        totalBooks,
+        avgOrderValue: Math.round(avgOrderValue),
+        totalRevenue: Math.round(totalRevenue),
+        platformCommission: Math.round(platformCommission),
+      },
+    });
+  } catch (error) {
+    console.error("Get platform summary error:", error);
+    return res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({
+      success: false,
+      message: "Server error",
+    });
+  }
+};
+
+// GET /admin/reports/category-performance
+export const getAdminCategoryPerformance = async (
+  req: Request,
+  res: Response,
+) => {
+  try {
+    const categoryPerformance = await Order.aggregate([
+      {
+        $match: {
+          status: "delivered",
+        },
+      },
+      {
+        $unwind: "$items",
+      },
+      {
+        $lookup: {
+          from: "books",
+          localField: "items.bookId",
+          foreignField: "_id",
+          as: "bookDetails",
+        },
+      },
+      {
+        $unwind: "$bookDetails",
+      },
+      {
+        $group: {
+          _id: "$bookDetails.category",
+          sales: { $sum: "$items.quantity" },
+          revenue: { $sum: "$items.price" },
+        },
+      },
+      {
+        $sort: { revenue: -1 },
+      },
+      {
+        $limit: 10,
+      },
+    ]);
+
+    return res.status(StatusCodes.OK).json({
+      success: true,
+      data: categoryPerformance.map((item) => ({
+        category: item._id,
+        sales: item.sales,
+        revenue: Math.round(item.revenue),
+      })),
+    });
+  } catch (error) {
+    console.error("Get category performance error:", error);
+    return res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({
+      success: false,
+      message: "Server error",
+    });
+  }
+};
+
+// GET /admin/reports/user-growth
+export const getAdminUserGrowth = async (req: Request, res: Response) => {
+  try {
+    const sixMonthsAgo = new Date();
+    sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
+
+    const userGrowth = await User.aggregate([
+      {
+        $match: {
+          createdAt: { $gte: sixMonthsAgo },
+        },
+      },
+      {
+        $group: {
+          _id: {
+            $dateToString: { format: "%Y-%m", date: "$createdAt" },
+          },
+          newUsers: { $sum: 1 },
+        },
+      },
+      {
+        $sort: { _id: 1 },
+      },
+      {
+        $project: {
+          month: {
+            $dateToString: {
+              format: "%b",
+              date: {
+                $dateFromString: { dateString: { $concat: ["$_id", "-01"] } },
+              },
+            },
+          },
+          newUsers: 1,
+        },
+      },
+    ]);
+
+    return res.status(StatusCodes.OK).json({
+      success: true,
+      data: userGrowth,
+    });
+  } catch (error) {
+    console.error("Get user growth error:", error);
+    return res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({
+      success: false,
+      message: "Server error",
+    });
+  }
+};
