@@ -4,10 +4,6 @@ import Rating from "../modules/rating/rating.model";
 import UserPreferences from "../modules/user/userpreferences.model";
 import Book from "../modules/book/book.model";
 
-// ─────────────────────────────────────────────
-// Types
-// ─────────────────────────────────────────────
-
 interface RecommendationQuery {
   userId: string;
   type?: "free" | "paid" | "all";
@@ -21,17 +17,12 @@ interface ScoredBook {
   reason: string;
 }
 
-// ─────────────────────────────────────────────
-// Helper: get user's reading profile
-// ─────────────────────────────────────────────
-
 async function getUserReadingProfile(userId: string) {
   const [stats, preferences] = await Promise.all([
     ReadingStats.findOne({ userId }),
     UserPreferences.findOne({ userId }),
   ]);
 
-  // Build genre preference map from reading history
   const genreScores: Record<string, number> = {};
 
   if (stats?.genreCount) {
@@ -40,7 +31,6 @@ async function getUserReadingProfile(userId: string) {
     }
   }
 
-  // Boost favorite genre
   if (stats?.favoriteGenre) {
     genreScores[stats.favoriteGenre] =
       (genreScores[stats.favoriteGenre] || 0) + 5;
@@ -61,10 +51,6 @@ async function getUserReadingProfile(userId: string) {
   };
 }
 
-// ─────────────────────────────────────────────
-// Helper: get books the user rated highly
-// ─────────────────────────────────────────────
-
 async function getUserHighRatedGenres(userId: string): Promise<string[]> {
   const highRatings = await Rating.find({
     userId,
@@ -82,10 +68,6 @@ async function getUserHighRatedGenres(userId: string): Promise<string[]> {
 
   return [...new Set(genres)];
 }
-
-// ─────────────────────────────────────────────
-// STEP 1: Content-Based Filtering (weight: 70%)
-// ─────────────────────────────────────────────
 
 async function contentBasedRecommendations(
   userId: string,
@@ -151,23 +133,16 @@ async function contentBasedRecommendations(
   return scored.sort((a, b) => b.score - a.score).slice(0, limit);
 }
 
-// ─────────────────────────────────────────────
-// STEP 2: Collaborative Filtering (weight: 30%)
-// Finds users with similar taste → surfaces their top-rated books
-// ─────────────────────────────────────────────
-
 async function collaborativeRecommendations(
   userId: string,
   excludeIds: string[],
   limit: number,
 ): Promise<ScoredBook[]> {
-  // Get books this user rated
   const userRatings = await Rating.find({ userId }).lean();
   if (userRatings.length === 0) return [];
 
   const userBookIds = userRatings.map((r) => r.bookId.toString());
 
-  // Find other users who rated at least 2 of the same books
   const similarUserRatings = await Rating.aggregate([
     {
       $match: {
@@ -186,14 +161,13 @@ async function collaborativeRecommendations(
     },
     { $match: { commonBooks: { $gte: 2 } } },
     { $sort: { commonBooks: -1, avgRating: -1 } },
-    { $limit: 20 }, // top 20 similar users
+    { $limit: 20 },
   ]);
 
   if (similarUserRatings.length === 0) return [];
 
   const similarUserIds = similarUserRatings.map((u) => u._id);
 
-  // Get books those similar users rated highly (4+), that the current user hasn't read
   const recommendations = await Rating.aggregate([
     {
       $match: {
@@ -235,10 +209,6 @@ async function collaborativeRecommendations(
   }));
 }
 
-// ─────────────────────────────────────────────
-// MAIN: Hybrid Recommendation (70% content + 30% collab)
-// ─────────────────────────────────────────────
-
 export async function getRecommendations(
   query: RecommendationQuery,
 ): Promise<any[]> {
@@ -248,12 +218,10 @@ export async function getRecommendations(
     const profile = await getUserReadingProfile(userId);
     const highRatedGenres = await getUserHighRatedGenres(userId);
 
-    // Merge high-rated genres into genreScores
     for (const g of highRatedGenres) {
       profile.genreScores[g] = (profile.genreScores[g] || 0) + 3;
     }
 
-    // Run both approaches in parallel
     const [contentResults, collabResults] = await Promise.all([
       contentBasedRecommendations(
         userId,
@@ -266,7 +234,6 @@ export async function getRecommendations(
       collaborativeRecommendations(userId, profile.excludeIds, limit),
     ]);
 
-    // Merge: content 70%, collab 30%
     const scoreMap = new Map<string, ScoredBook>();
 
     for (const item of contentResults) {
@@ -289,7 +256,6 @@ export async function getRecommendations(
       }
     }
 
-    // Sort final list
     const finalIds = [...scoreMap.values()]
       .sort((a, b) => b.score - a.score)
       .slice(0, limit)
@@ -299,7 +265,6 @@ export async function getRecommendations(
       [...scoreMap.values()].map((item) => [item.bookId, item.reason]),
     );
 
-    // Fetch full book details
     const books = await Book.find({
       _id: { $in: finalIds.map((id) => new mongoose.Types.ObjectId(id)) },
     })
@@ -307,7 +272,6 @@ export async function getRecommendations(
       .populate("category", "name")
       .lean();
 
-    // Sort books in the same order as finalIds and attach reason
     const sortedBooks = finalIds
       .map((id) => {
         const book = books.find((b: any) => b._id.toString() === id);

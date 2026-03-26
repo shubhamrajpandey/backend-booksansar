@@ -4,19 +4,16 @@ import {
   getTrendingBooks,
 } from "../../services/ai.service";
 
-// GET /api/ai/recommendations
-// Query params: type (free|paid|all), genre, limit
 export const getRecommendations = async (
   req: Request,
   res: Response,
   next: NextFunction,
 ) => {
   try {
-    const userId = req.user?.id; // from auth middleware
+    const userId = req.user?.id;
     const { type, genre, limit } = req.query;
 
     if (!userId) {
-      // Not logged in — return trending
       const trending = await getTrendingBooks(
         (type as "free" | "paid" | "all") || "all",
         Number(limit) || 10,
@@ -45,7 +42,6 @@ export const getRecommendations = async (
   }
 };
 
-// GET /api/ai/trending
 export const getTrending = async (
   req: Request,
   res: Response,
