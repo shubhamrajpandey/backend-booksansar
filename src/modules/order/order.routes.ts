@@ -7,11 +7,14 @@ import {
   updateOrderStatus,
   getOrderStats,
   getVendorEarnings,
+  getShippingPreview,
 } from "./order.controller";
 import { authenticateToken } from "../../middlewares/auth.middleware";
 import { verifyRole } from "../../middlewares/role.middleware";
 
 const router = Router();
+
+router.get("/shipping-preview", authenticateToken, getShippingPreview);
 
 router.get("/my", authenticateToken, getMyOrders);
 

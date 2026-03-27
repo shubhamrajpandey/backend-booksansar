@@ -2,6 +2,46 @@ import { Request, Response } from "express";
 import { Order } from "./order.model";
 import Vendor from "../vendor/vendor.model";
 
+export const SHIPPING_RATES = {
+  insideValley: 80,
+  outsideValley: 150,
+  free: 0,
+} as const;
+
+export const getShippingPreview = async (req: Request, res: Response) => {
+  try {
+    const customerId = (req as any).user?.id;
+    const isInsideValley = req.query.insideValley === "true";
+
+    const previousOrderCount = await Order.countDocuments({
+      customerId,
+      status: { $nin: ["cancelled", "pending_payment"] },
+    });
+
+    const isFirstOrder = previousOrderCount === 0;
+
+    const shippingCost = isFirstOrder
+      ? SHIPPING_RATES.free
+      : isInsideValley
+        ? SHIPPING_RATES.insideValley
+        : SHIPPING_RATES.outsideValley;
+
+    return res.json({
+      success: true,
+      data: {
+        isFirstOrder,
+        shippingCost,
+        insideValleyRate: SHIPPING_RATES.insideValley,
+        outsideValleyRate: SHIPPING_RATES.outsideValley,
+      },
+    });
+  } catch (err) {
+    return res
+      .status(500)
+      .json({ success: false, message: "Failed to fetch shipping info" });
+  }
+};
+
 export const getMyOrders = async (req: Request, res: Response) => {
   try {
     const customerId = (req as any).user?.id;
