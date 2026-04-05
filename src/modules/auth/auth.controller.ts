@@ -113,6 +113,15 @@ export const userLogin = async (req: Request, res: Response) => {
       }
     }
 
+    if (user.role === "rider") {
+      if (user.accountStatus !== "active") {
+        return res.status(StatusCodes.FORBIDDEN).json({
+          success: false,
+          message: "Rider account is not active.",
+        });
+      }
+    }
+
     const token = jwt.sign(
       { id: user._id, role: user.role },
       process.env.JWT_SECRET as string,

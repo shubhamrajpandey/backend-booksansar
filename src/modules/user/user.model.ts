@@ -4,7 +4,7 @@ export interface IUser extends Document {
   name: string;
   email: string;
   password: string;
-  role: "learner" | "vendor" | "admin";
+  role: "learner" | "vendor" | "admin" | "rider";
   phoneNumber?: string;
   location?: string;
   bio?: string;
@@ -24,7 +24,7 @@ const userSchema: Schema<IUser> = new Schema(
 
     role: {
       type: String,
-      enum: ["learner", "vendor", "admin"],
+      enum: ["learner", "vendor", "admin", "rider"],
       default: "learner",
     },
 
@@ -33,7 +33,7 @@ const userSchema: Schema<IUser> = new Schema(
       unique: true,
       sparse: true,
       required: function (this: IUser) {
-        return this.role === "vendor";
+        return this.role === "vendor" || this.role === "rider";
       },
     },
 
@@ -59,7 +59,7 @@ const userSchema: Schema<IUser> = new Schema(
       default: "active",
     },
   },
-  { timestamps: true }
+  { timestamps: true },
 );
 
 const User: Model<IUser> = mongoose.model<IUser>("User", userSchema);
