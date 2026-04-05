@@ -133,6 +133,7 @@ export const userLogin = async (req: Request, res: Response) => {
       name: user.name,
       email: user.email,
       role: user.role,
+      isFirstLogin: user.isFirstLogin,
     };
 
     res.status(StatusCodes.OK).json({
@@ -264,6 +265,34 @@ export const vendorRegistration = async (req: Request, res: Response) => {
       return res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({
         success: false,
         message: "An unexpected error occurred",
+      });
+    }
+  }
+};
+
+// PATCH /api/auth/change-password
+export const changePassword = async (req: Request, res: Response) => {
+  try {
+    const { newPassword } = req.body;
+    const userId = req.user?.id;
+
+    const salt = await bcrypt.genSalt(10);
+    const hashed = await bcrypt.hash(newPassword, salt);
+
+    await User.findByIdAndUpdate(userId, {
+      password: hashed,
+      isFirstLogin: false,
+    });
+
+    return res.status(StatusCodes.OK).json({
+      success: true,
+      message: "Password changed successfully.",
+    });
+  } catch (error: unknown) {
+    if (error instanceof Error) {
+      return res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({
+        success: false,
+        message: error.message,
       });
     }
   }

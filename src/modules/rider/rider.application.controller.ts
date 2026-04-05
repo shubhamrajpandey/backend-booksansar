@@ -2,6 +2,7 @@ import { Request, Response } from "express";
 import { StatusCodes } from "http-status-codes";
 import bcrypt from "bcrypt";
 import crypto from "crypto";
+import mongoose from "mongoose";
 import RiderApplication from "./rider.application.model";
 import User from "../user/user.model";
 import {
@@ -40,7 +41,6 @@ export const applyAsRider = async (req: Request, res: Response) => {
       licenseUrl,
     } = req.body;
 
-    // Check required fields
     if (
       !fullName ||
       !email ||
@@ -61,7 +61,6 @@ export const applyAsRider = async (req: Request, res: Response) => {
       });
     }
 
-    // Check if already applied with same email
     const existing = await RiderApplication.findOne({ email });
     if (existing) {
       if (existing.status === "pending") {
@@ -76,11 +75,9 @@ export const applyAsRider = async (req: Request, res: Response) => {
           message: "This email is already registered as a rider.",
         });
       }
-      // If rejected before, allow re-application — delete old one
       await RiderApplication.deleteOne({ email });
     }
 
-    // Check if email already exists as a user account
     const existingUser = await User.findOne({ email });
     if (existingUser) {
       return res.status(StatusCodes.CONFLICT).json({
@@ -128,7 +125,6 @@ export const applyAsRider = async (req: Request, res: Response) => {
 
 // ─────────────────────────────────────────────────────────────
 // GET /api/rider/applications  (admin only)
-// Admin sees all applications with optional status filter
 // ─────────────────────────────────────────────────────────────
 export const getAllApplications = async (req: Request, res: Response) => {
   try {
@@ -179,7 +175,6 @@ export const getAllApplications = async (req: Request, res: Response) => {
 
 // ─────────────────────────────────────────────────────────────
 // GET /api/rider/applications/:id  (admin only)
-// Admin sees single application details
 // ─────────────────────────────────────────────────────────────
 export const getApplicationById = async (req: Request, res: Response) => {
   try {
@@ -212,7 +207,7 @@ export const getApplicationById = async (req: Request, res: Response) => {
 
 // ─────────────────────────────────────────────────────────────
 // PATCH /api/rider/applications/:id/approve  (admin only)
-// Admin approves → creates User with role "rider" → sends email
+// Creates User with role "rider" + isFirstLogin: true + sends email
 // ─────────────────────────────────────────────────────────────
 export const approveApplication = async (req: Request, res: Response) => {
   try {
@@ -232,12 +227,13 @@ export const approveApplication = async (req: Request, res: Response) => {
       });
     }
 
-    // Generate a temporary password for the rider
     const tempPassword = generateTempPassword();
     const salt = await bcrypt.genSalt(10);
     const hashedPassword = await bcrypt.hash(tempPassword, salt);
 
-    // Create a User account with role "rider"
+    // ── KEY CHANGE: isFirstLogin: true ──────────────────────
+    // This tells the mobile app to force the change-password
+    // screen before the rider can access the home screen
     const riderUser = await User.create({
       name: application.fullName,
       email: application.email,
@@ -246,14 +242,13 @@ export const approveApplication = async (req: Request, res: Response) => {
       role: "rider",
       location: `${application.address}, ${application.district}`,
       accountStatus: "active",
+      isFirstLogin: true, // ← only change from before
     });
 
-    // Update application status
     application.status = "approved";
     application.riderId = riderUser._id as mongoose.Types.ObjectId;
     await application.save();
 
-    // Send approval email with login credentials
     await sendRiderApprovalEmail({
       to: application.email,
       name: application.fullName,
@@ -284,7 +279,6 @@ export const approveApplication = async (req: Request, res: Response) => {
 
 // ─────────────────────────────────────────────────────────────
 // PATCH /api/rider/applications/:id/reject  (admin only)
-// Admin rejects with an optional reason → sends email
 // ─────────────────────────────────────────────────────────────
 export const rejectApplication = async (req: Request, res: Response) => {
   try {
@@ -313,7 +307,6 @@ export const rejectApplication = async (req: Request, res: Response) => {
     application.rejectionReason = rejectionReason;
     await application.save();
 
-    // Send rejection email
     await sendRiderRejectionEmail({
       to: application.email,
       name: application.fullName,
@@ -337,6 +330,3 @@ export const rejectApplication = async (req: Request, res: Response) => {
     });
   }
 };
-
-// Need this import at the top for mongoose.Types.ObjectId
-import mongoose from "mongoose";

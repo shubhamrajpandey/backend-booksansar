@@ -10,6 +10,7 @@ export interface IUser extends Document {
   bio?: string;
   avatar?: string;
   accountStatus: "active" | "suspended";
+  isFirstLogin: boolean;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -57,6 +58,10 @@ const userSchema: Schema<IUser> = new Schema(
       type: String,
       enum: ["active", "suspended"],
       default: "active",
+    },
+    isFirstLogin: {
+      type: Boolean,
+      default: false,
     },
   },
   { timestamps: true },
