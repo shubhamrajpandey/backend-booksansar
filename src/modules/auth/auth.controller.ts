@@ -169,7 +169,11 @@ export const verifyEmail = async (req: Request, res: Response) => {
     }
 
 
-    await User.findByIdAndUpdate(userId, { isVerified: true });
+    await User.findByIdAndUpdate(
+      userId,
+      { $set: { isVerified: true } },
+      { new: true }
+    );
 
     record.used = true;
     await record.save();
