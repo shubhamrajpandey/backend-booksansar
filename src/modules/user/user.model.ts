@@ -11,6 +11,7 @@ export interface IUser extends Document {
   avatar?: string;
   accountStatus: "active" | "suspended";
   isFirstLogin: boolean;
+  isVerified: boolean;
   createdAt: Date;
   updatedAt: Date;
 }

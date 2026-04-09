@@ -11,6 +11,8 @@ if (!MONGO_URI) {
 
 const connectDb = async () => {
   try {
+    // Setting up Google DNS as a fallback because Node.js is resolving DNS to 127.0.0.1 locally which throws ECONNREFUSED
+    require("dns").setServers(["8.8.8.8", "8.8.4.4"]);
     mongoose.connect(MONGO_URI);
     logger.info("BookSansar Database successfully connnected.");
   } catch (error) {
