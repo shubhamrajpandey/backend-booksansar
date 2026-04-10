@@ -3,6 +3,7 @@ import Conversation from "./models/conversation.model";
 import Message from "./models/message.model";
 import Book from "../book/book.model";
 import User from "../user/user.model";
+import Vendor from "../vendor/vendor.model"; // ← added
 import { StatusCodes } from "http-status-codes";
 import logger from "../../utils/logger";
 
@@ -32,7 +33,23 @@ export const createOrGetConversation = async (req: Request, res: Response) => {
         });
       }
 
-      const sellerId = book.vendorId || book.uploader;
+      // ── FIX: vendorId is a Vendor doc ID, not a User ID ──────
+      // We need to resolve it to a User ID first
+      let sellerId: any = null;
+
+      if (book.vendorId) {
+        // Book uploaded by a vendor — find the vendor's userId
+        const vendor = await Vendor.findById(book.vendorId).lean();
+        if (vendor?.userId) {
+          sellerId = vendor.userId;
+        }
+      }
+
+      // Fallback to uploader (for second-hand books uploaded by learners)
+      if (!sellerId && book.uploader) {
+        sellerId = book.uploader;
+      }
+      // ──────────────────────────────────────────────────────────
 
       if (!sellerId) {
         return res.status(StatusCodes.BAD_REQUEST).json({
