@@ -1,6 +1,7 @@
 import { Request, Response } from "express";
 import { Order } from "./order.model";
 import Vendor from "../vendor/vendor.model";
+import User from "../user/user.model";
 
 export const SHIPPING_RATES = {
   insideValley: 80,
@@ -19,7 +20,6 @@ export const getShippingPreview = async (req: Request, res: Response) => {
     });
 
     const isFirstOrder = previousOrderCount === 0;
-
     const shippingCost = isFirstOrder
       ? SHIPPING_RATES.free
       : isInsideValley
@@ -36,25 +36,19 @@ export const getShippingPreview = async (req: Request, res: Response) => {
       },
     });
   } catch (err) {
-    return res
-      .status(500)
-      .json({ success: false, message: "Failed to fetch shipping info" });
+    return res.status(500).json({ success: false, message: "Failed to fetch shipping info" });
   }
 };
 
 export const getMyOrders = async (req: Request, res: Response) => {
   try {
     const customerId = (req as any).user?.id;
-
     const orders = await Order.find({ customerId })
       .sort({ createdAt: -1 })
       .select("-statusHistory");
-
     return res.json({ success: true, data: orders });
   } catch (err) {
-    return res
-      .status(500)
-      .json({ success: false, message: "Failed to fetch orders" });
+    return res.status(500).json({ success: false, message: "Failed to fetch orders" });
   }
 };
 
@@ -63,38 +57,27 @@ export const getOrderById = async (req: Request, res: Response) => {
     const order = await Order.findOne({ orderId: req.params.orderId })
       .populate("customerId", "name email")
       .populate("items.bookId", "title coverImage type")
-      .populate("items.vendorId", "storeName");
+      .populate("items.vendorId", "storeName")
+      .populate("riderId", "name phoneNumber"); // ← populate rider info
 
-    if (!order)
-      return res
-        .status(404)
-        .json({ success: false, message: "Order not found" });
-
+    if (!order) return res.status(404).json({ success: false, message: "Order not found" });
     return res.json({ success: true, data: order });
   } catch (err) {
-    return res
-      .status(500)
-      .json({ success: false, message: "Failed to fetch order" });
+    return res.status(500).json({ success: false, message: "Failed to fetch order" });
   }
 };
 
 export const getVendorOrders = async (req: Request, res: Response) => {
   try {
     const userId = (req as any).user?.id;
-
     const vendor = await Vendor.findOne({ userId });
-    if (!vendor) {
-      return res.status(404).json({
-        success: false,
-        message: "Vendor profile not found.",
-      });
-    }
+    if (!vendor) return res.status(404).json({ success: false, message: "Vendor profile not found." });
 
     const { status, page = 1, limit = 20 } = req.query;
     const skip = (Number(page) - 1) * Number(limit);
 
     const filter: any = { "items.vendorId": vendor._id };
-    if (status) filter.status = status;
+    if (status && status !== "all") filter.status = status;
 
     const [orders, total] = await Promise.all([
       Order.find(filter)
@@ -102,6 +85,7 @@ export const getVendorOrders = async (req: Request, res: Response) => {
         .skip(skip)
         .limit(Number(limit))
         .populate("customerId", "name email")
+        .populate("riderId", "name phoneNumber") // ← populate rider
         .select("-statusHistory"),
       Order.countDocuments(filter),
     ]);
@@ -109,24 +93,91 @@ export const getVendorOrders = async (req: Request, res: Response) => {
     return res.json({
       success: true,
       data: orders,
-      pagination: {
-        total,
-        page: Number(page),
-        limit: Number(limit),
-        pages: Math.ceil(total / Number(limit)),
-      },
+      pagination: { total, page: Number(page), limit: Number(limit), pages: Math.ceil(total / Number(limit)) },
     });
   } catch (err) {
-    return res
-      .status(500)
-      .json({ success: false, message: "Failed to fetch vendor orders" });
+    return res.status(500).json({ success: false, message: "Failed to fetch vendor orders" });
+  }
+};
+
+// ─────────────────────────────────────────────────────────────
+// PATCH /api/v1/orders/:orderId/assign-rider  (vendor only)
+// Vendor assigns a rider to their confirmed order
+// ─────────────────────────────────────────────────────────────
+export const assignRiderToOrder = async (req: Request, res: Response) => {
+  try {
+    const userId = (req as any).user?.id;
+    const { orderId } = req.params;
+    const { riderId } = req.body;
+
+    if (!riderId) {
+      return res.status(400).json({ success: false, message: "riderId is required" });
+    }
+
+    // Verify vendor owns this order
+    const vendor = await Vendor.findOne({ userId });
+    if (!vendor) return res.status(404).json({ success: false, message: "Vendor not found" });
+
+    const order = await Order.findOne({
+      orderId,
+      "items.vendorId": vendor._id,
+    });
+    if (!order) return res.status(404).json({ success: false, message: "Order not found" });
+
+    // Only confirmed orders can be assigned
+    if (!["confirmed", "payment_received"].includes(order.status)) {
+      return res.status(400).json({
+        success: false,
+        message: `Cannot assign rider to an order with status: ${order.status}`,
+      });
+    }
+
+    // Verify rider exists and has rider role
+    const rider = await User.findOne({ _id: riderId, role: "rider", accountStatus: "active" });
+    if (!rider) return res.status(404).json({ success: false, message: "Rider not found or not active" });
+
+    order.riderId = rider._id as any;
+    order.status = "assigned";
+    order.statusHistory.push({
+      status: "assigned",
+      changedAt: new Date(),
+      note: `Assigned to rider: ${rider.name}`,
+    });
+    await order.save();
+
+    return res.status(200).json({
+      success: true,
+      message: `Order assigned to ${rider.name} successfully.`,
+      data: {
+        orderId: order.orderId,
+        status: order.status,
+        rider: { id: rider._id, name: rider.name, phone: rider.phoneNumber },
+      },
+    });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+// ─────────────────────────────────────────────────────────────
+// GET /api/v1/orders/riders  (vendor only)
+// Get list of available active riders for the dropdown
+// ─────────────────────────────────────────────────────────────
+export const getAvailableRiders = async (req: Request, res: Response) => {
+  try {
+    const riders = await User.find({ role: "rider" }) // ← remove accountStatus filter
+      .select("name phoneNumber location")
+      .lean();
+
+    return res.status(200).json({ success: true, data: riders });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, message: err.message });
   }
 };
 
 export const getAllOrdersAdmin = async (req: Request, res: Response) => {
   try {
     const { status, page = 1, limit = 20, search } = req.query;
-
     const filter: any = {};
     if (status) filter.status = status;
     if (search) {
@@ -135,33 +186,24 @@ export const getAllOrdersAdmin = async (req: Request, res: Response) => {
         { contact: { $regex: search, $options: "i" } },
       ];
     }
-
     const skip = (Number(page) - 1) * Number(limit);
-
     const [orders, total] = await Promise.all([
       Order.find(filter)
         .sort({ createdAt: -1 })
         .skip(skip)
         .limit(Number(limit))
         .populate("customerId", "name email")
+        .populate("riderId", "name phoneNumber")
         .select("-statusHistory"),
       Order.countDocuments(filter),
     ]);
-
     return res.json({
       success: true,
       data: orders,
-      pagination: {
-        total,
-        page: Number(page),
-        limit: Number(limit),
-        pages: Math.ceil(total / Number(limit)),
-      },
+      pagination: { total, page: Number(page), limit: Number(limit), pages: Math.ceil(total / Number(limit)) },
     });
   } catch (err) {
-    return res
-      .status(500)
-      .json({ success: false, message: "Failed to fetch orders" });
+    return res.status(500).json({ success: false, message: "Failed to fetch orders" });
   }
 };
 
@@ -170,47 +212,29 @@ export const updateOrderStatus = async (req: Request, res: Response) => {
     const { status, note } = req.body;
     const { orderId } = req.params;
 
-    const allowed = [
-      "confirmed",
-      "shipped",
-      "delivered",
-      "cancelled",
-      "refunded",
-    ];
+    const allowed = ["confirmed", "shipped", "delivered", "cancelled", "refunded"];
     if (!allowed.includes(status)) {
-      return res
-        .status(400)
-        .json({ success: false, message: "Invalid status value" });
+      return res.status(400).json({ success: false, message: "Invalid status value" });
     }
 
     const order = await Order.findOne({ orderId });
-    if (!order)
-      return res
-        .status(404)
-        .json({ success: false, message: "Order not found" });
+    if (!order) return res.status(404).json({ success: false, message: "Order not found" });
 
     if (["delivered", "refunded"].includes(order.status)) {
-      return res.status(400).json({
-        success: false,
-        message: `Cannot change a ${order.status} order`,
-      });
+      return res.status(400).json({ success: false, message: `Cannot change a ${order.status} order` });
     }
 
     order.status = status as any;
-    order.statusHistory.push({
-      status: status as any,
-      changedAt: new Date(),
-      note,
-    });
+    order.statusHistory.push({ status: status as any, changedAt: new Date(), note });
 
-    if (status === "delivered" && order.escrow.status === "holding") {
-      order.escrow.status = "released";
-      order.escrow.releasedAt = new Date();
+    if (status === "delivered") {
+      order.deliveredAt = new Date();
+      if (order.escrow.status === "holding") {
+        order.escrow.status = "released";
+        order.escrow.releasedAt = new Date();
+      }
     }
-
-    if (status === "refunded") {
-      order.escrow.status = "refunded";
-    }
+    if (status === "refunded") order.escrow.status = "refunded";
 
     await order.save();
 
@@ -226,28 +250,14 @@ export const updateOrderStatus = async (req: Request, res: Response) => {
       },
     });
   } catch (err) {
-    return res
-      .status(500)
-      .json({ success: false, message: "Failed to update order status" });
+    return res.status(500).json({ success: false, message: "Failed to update order status" });
   }
 };
 
 export const getVendorEarnings = async (_req: Request, res: Response) => {
   try {
     const earnings = await Order.aggregate([
-      {
-        $match: {
-          status: {
-            $in: [
-              "payment_received",
-              "confirmed",
-              "shipped",
-              "delivered",
-              "refunded",
-            ],
-          },
-        },
-      },
+      { $match: { status: { $in: ["payment_received", "confirmed", "shipped", "delivered", "refunded"] } } },
       { $unwind: "$items" },
       {
         $group: {
@@ -256,43 +266,13 @@ export const getVendorEarnings = async (_req: Request, res: Response) => {
           grossAmount: { $sum: "$escrow.grossAmount" },
           commissionAmount: { $sum: "$escrow.commissionAmount" },
           vendorAmount: { $sum: "$escrow.vendorAmount" },
-          releasedAmount: {
-            $sum: {
-              $cond: [
-                { $eq: ["$escrow.status", "released"] },
-                "$escrow.vendorAmount",
-                0,
-              ],
-            },
-          },
-          holdingAmount: {
-            $sum: {
-              $cond: [
-                { $eq: ["$escrow.status", "holding"] },
-                "$escrow.vendorAmount",
-                0,
-              ],
-            },
-          },
+          releasedAmount: { $sum: { $cond: [{ $eq: ["$escrow.status", "released"] }, "$escrow.vendorAmount", 0] } },
+          holdingAmount: { $sum: { $cond: [{ $eq: ["$escrow.status", "holding"] }, "$escrow.vendorAmount", 0] } },
         },
       },
-      {
-        $lookup: {
-          from: "vendors",
-          localField: "_id",
-          foreignField: "_id",
-          as: "vendor",
-        },
-      },
+      { $lookup: { from: "vendors", localField: "_id", foreignField: "_id", as: "vendor" } },
       { $unwind: { path: "$vendor", preserveNullAndEmptyArrays: true } },
-      {
-        $lookup: {
-          from: "users",
-          localField: "vendor.userId",
-          foreignField: "_id",
-          as: "user",
-        },
-      },
+      { $lookup: { from: "users", localField: "vendor.userId", foreignField: "_id", as: "user" } },
       { $unwind: { path: "$user", preserveNullAndEmptyArrays: true } },
       {
         $project: {
@@ -311,12 +291,9 @@ export const getVendorEarnings = async (_req: Request, res: Response) => {
       },
       { $sort: { grossAmount: -1 } },
     ]);
-
     return res.json({ success: true, data: earnings });
   } catch (err) {
-    return res
-      .status(500)
-      .json({ success: false, message: "Failed to fetch vendor earnings" });
+    return res.status(500).json({ success: false, message: "Failed to fetch vendor earnings" });
   }
 };
 
@@ -324,31 +301,14 @@ export const getOrderStats = async (_req: Request, res: Response) => {
   try {
     const [total, byStatus, revenue] = await Promise.all([
       Order.countDocuments(),
-
       Order.aggregate([{ $group: { _id: "$status", count: { $sum: 1 } } }]),
-
       Order.aggregate([
-        {
-          $match: {
-            status: {
-              $in: ["payment_received", "confirmed", "shipped", "delivered"],
-            },
-          },
-        },
-        {
-          $group: {
-            _id: null,
-            totalRevenue: { $sum: "$totalAmount" },
-            totalCommission: { $sum: "$escrow.commissionAmount" },
-            totalPaidOut: { $sum: "$escrow.vendorAmount" },
-          },
-        },
+        { $match: { status: { $in: ["payment_received", "confirmed", "shipped", "delivered"] } } },
+        { $group: { _id: null, totalRevenue: { $sum: "$totalAmount" }, totalCommission: { $sum: "$escrow.commissionAmount" }, totalPaidOut: { $sum: "$escrow.vendorAmount" } } },
       ]),
     ]);
 
-    const statusMap = Object.fromEntries(
-      byStatus.map((s: any) => [s._id, s.count]),
-    );
+    const statusMap = Object.fromEntries(byStatus.map((s: any) => [s._id, s.count]));
 
     return res.json({
       success: true,
@@ -357,6 +317,9 @@ export const getOrderStats = async (_req: Request, res: Response) => {
         pending: statusMap["pending_payment"] ?? 0,
         paymentReceived: statusMap["payment_received"] ?? 0,
         confirmed: statusMap["confirmed"] ?? 0,
+        assigned: statusMap["assigned"] ?? 0,
+        pickedUp: statusMap["picked_up"] ?? 0,
+        inTransit: statusMap["in_transit"] ?? 0,
         shipped: statusMap["shipped"] ?? 0,
         delivered: statusMap["delivered"] ?? 0,
         cancelled: statusMap["cancelled"] ?? 0,
@@ -367,8 +330,6 @@ export const getOrderStats = async (_req: Request, res: Response) => {
       },
     });
   } catch (err) {
-    return res
-      .status(500)
-      .json({ success: false, message: "Failed to fetch stats" });
+    return res.status(500).json({ success: false, message: "Failed to fetch stats" });
   }
 };

@@ -27,26 +27,19 @@ export const initiateEsewaPayment = async (req: Request, res: Response) => {
     } = req.body;
 
     if (!items?.length) {
-      return res
-        .status(400)
-        .json({ success: false, message: "No items in order" });
+      return res.status(400).json({ success: false, message: "No items in order" });
     }
 
     const bookIds = items.map((i: any) => i.bookId);
     const books = await Book.find({ _id: { $in: bookIds } }).lean();
-
     const bookMap = new Map(books.map((b) => [String(b._id), b]));
 
     const resolvedItems = items.map((item: any) => {
       const book = bookMap.get(String(item.bookId));
       if (!book) throw new Error(`Book ${item.bookId} not found`);
-
       if (!book.vendorId) {
-        throw new Error(
-          `Book "${book.title}" has no vendor assigned. Cannot process order.`,
-        );
+        throw new Error(`Book "${book.title}" has no vendor assigned. Cannot process order.`);
       }
-
       return {
         bookId: book._id,
         title: book.title,
@@ -58,15 +51,23 @@ export const initiateEsewaPayment = async (req: Request, res: Response) => {
       };
     });
 
+    // ── Book price only (no delivery) ──────────────────────────
     const verifiedSubtotal = resolvedItems.reduce(
       (sum: number, i: any) => sum + i.price,
       0,
     );
-    const verifiedShipping = shippingMethod === "express" ? 150 : 0;
-    const verifiedTotal = verifiedSubtotal + verifiedShipping;
+
+    // ── Delivery charge — goes entirely to rider ────────────────
+    // Use actual shipping cost from request, validated on backend
+    const verifiedShippingCost = shippingCost ?? 0;
+
+    const verifiedTotal = verifiedSubtotal + verifiedShippingCost;
 
     const transactionUuid = `BS-${Date.now()}`;
-    const escrow = calculateEscrow(verifiedTotal);
+
+    // ── FIX: pass book price and delivery SEPARATELY ───────────
+    // calculateEscrow now knows to only commission the book price
+    const escrow = calculateEscrow(verifiedSubtotal, verifiedShippingCost);
 
     const order = new Order({
       orderId: transactionUuid,
@@ -75,7 +76,7 @@ export const initiateEsewaPayment = async (req: Request, res: Response) => {
       items: resolvedItems,
       shippingAddress,
       shippingMethod: shippingMethod || "standard",
-      shippingCost: verifiedShipping,
+      shippingCost: verifiedShippingCost,
       subtotal: verifiedSubtotal,
       totalAmount: verifiedTotal,
       status: "pending_payment",
@@ -114,32 +115,22 @@ export const initiateEsewaPayment = async (req: Request, res: Response) => {
   }
 };
 
-export const verifyEsewaPaymentCallback = async (
-  req: Request,
-  res: Response,
-) => {
+export const verifyEsewaPaymentCallback = async (req: Request, res: Response) => {
   const { data } = req.query;
 
   if (!data) {
-    return res
-      .status(400)
-      .json({ success: false, message: "No payment data received" });
+    return res.status(400).json({ success: false, message: "No payment data received" });
   }
 
   try {
     const result = await verifyEsewaPayment(data as string);
 
     if (!result.verified) {
-      return res
-        .status(400)
-        .json({ success: false, message: "Payment verification failed" });
+      return res.status(400).json({ success: false, message: "Payment verification failed" });
     }
 
     const order = await Order.findOneAndUpdate(
-      {
-        orderId: result.transactionUuid,
-        status: "pending_payment",
-      },
+      { orderId: result.transactionUuid, status: "pending_payment" },
       {
         status: "payment_received",
         "payment.transactionCode": result.transactionCode,
@@ -156,9 +147,7 @@ export const verifyEsewaPaymentCallback = async (
     );
 
     if (!order) {
-      return res
-        .status(200)
-        .json({ success: true, message: "Already processed" });
+      return res.status(200).json({ success: true, message: "Already processed" });
     }
 
     return res.json({
@@ -167,13 +156,18 @@ export const verifyEsewaPaymentCallback = async (
       data: {
         orderId: order.orderId,
         totalAmount: order.totalAmount,
-        escrow: order.escrow,
+        escrow: {
+          ...order.escrow,
+          // Show the breakdown clearly
+          bookPrice: order.escrow.grossAmount,
+          bookSansarCommission: order.escrow.commissionAmount,
+          vendorReceives: order.escrow.vendorAmount,
+          riderReceives: order.escrow.riderAmount,
+        },
       },
     });
   } catch (err: any) {
     logger.error("eSewa verification error");
-    return res
-      .status(500)
-      .json({ success: false, message: "Verification failed" });
+    return res.status(500).json({ success: false, message: "Verification failed" });
   }
 };

@@ -4,6 +4,9 @@ export type OrderStatus =
   | "pending_payment"
   | "payment_received"
   | "confirmed"
+  | "assigned"
+  | "picked_up"
+  | "in_transit"
   | "shipped"
   | "delivered"
   | "cancelled"
@@ -34,10 +37,13 @@ export interface IShippingAddress {
 
 export interface IEscrow {
   status: EscrowStatus;
-  grossAmount: number;
-  commissionRate: number;
-  commissionAmount: number;
-  vendorAmount: number;
+  grossAmount: number;        // book price only
+  commissionRate: number;     // 0.03
+  commissionAmount: number;   // 3% of book price → BookSansar keeps
+  vendorAmount: number;       // book price - commission → vendor gets
+  deliveryCharge: number;     // ← new: full delivery cost
+  riderAmount: number;        // ← new: rider gets full delivery charge
+  totalAmount: number;        // ← new: grossAmount + deliveryCharge
   releasedAt?: Date;
 }
 
@@ -61,6 +67,8 @@ export interface IOrder extends Document {
   status: OrderStatus;
   payment: IPaymentInfo;
   escrow: IEscrow;
+  riderId?: mongoose.Types.ObjectId;
+  deliveredAt?: Date;
   statusHistory: { status: OrderStatus; changedAt: Date; note?: string }[];
   createdAt: Date;
   updatedAt: Date;
@@ -69,9 +77,7 @@ export interface IOrder extends Document {
 const OrderSchema = new Schema<IOrder>(
   {
     orderId: { type: String, required: true, unique: true },
-
     customerId: { type: Schema.Types.ObjectId, ref: "User", required: true },
-
     contact: { type: String, required: true },
 
     items: [
@@ -120,6 +126,9 @@ const OrderSchema = new Schema<IOrder>(
         "pending_payment",
         "payment_received",
         "confirmed",
+        "assigned",
+        "picked_up",
+        "in_transit",
         "shipped",
         "delivered",
         "cancelled",
@@ -141,11 +150,24 @@ const OrderSchema = new Schema<IOrder>(
         enum: ["holding", "released", "refunded"],
         default: "holding",
       },
-      grossAmount: { type: Number },
-      commissionRate: { type: Number },
-      commissionAmount: { type: Number },
-      vendorAmount: { type: Number },
+      grossAmount: { type: Number, default: 0 },
+      commissionRate: { type: Number, default: 0.03 },
+      commissionAmount: { type: Number, default: 0 },
+      vendorAmount: { type: Number, default: 0 },
+      deliveryCharge: { type: Number, default: 0 },  // ← new
+      riderAmount: { type: Number, default: 0 },      // ← new
+      totalAmount: { type: Number, default: 0 },      // ← new
       releasedAt: { type: Date },
+    },
+
+    riderId: {
+      type: Schema.Types.ObjectId,
+      ref: "User",
+      default: null,
+    },
+    deliveredAt: {
+      type: Date,
+      default: null,
     },
 
     statusHistory: [
@@ -161,5 +183,6 @@ const OrderSchema = new Schema<IOrder>(
 
 OrderSchema.index({ customerId: 1, createdAt: -1 });
 OrderSchema.index({ "items.vendorId": 1, createdAt: -1 });
+OrderSchema.index({ riderId: 1, status: 1 });
 
 export const Order = mongoose.model<IOrder>("Order", OrderSchema);
