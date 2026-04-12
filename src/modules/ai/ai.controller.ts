@@ -2,6 +2,8 @@ import { Request, Response, NextFunction } from "express";
 import {
   getSmartRecommendations,
   getTrendingBooks,
+  chatWithBookSansarAI,
+  aiSearch,
 } from "../../services/ai.service";
 
 export const getRecommendations = async (
@@ -54,6 +56,58 @@ export const getTrending = async (
       Number(limit) || 10,
     );
     return res.status(200).json({ success: true, data: books });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const aiChat = async (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) => {
+  try {
+    const { message, history = [] } = req.body;
+
+    if (!message || message.trim().length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: "Message is required.",
+      });
+    }
+
+    const reply = await chatWithBookSansarAI(message, history);
+
+    return res.status(200).json({
+      success: true,
+      data: { reply },
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const smartSearch = async (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) => {
+  try {
+    const query = req.query.q as string;
+
+    if (!query) {
+      return res.status(400).json({
+        success: false,
+        message: "Search query is required.",
+      });
+    }
+
+    const results = await aiSearch(query);
+
+    return res.status(200).json({
+      success: true,
+      data: results,
+    });
   } catch (error) {
     next(error);
   }
