@@ -20,11 +20,7 @@ export const getRecommendations = async (
         (type as "free" | "paid" | "all") || "all",
         Number(limit) || 10,
       );
-      return res.status(200).json({
-        success: true,
-        data: trending,
-        source: "trending",
-      });
+      return res.status(200).json({ success: true, data: trending, source: "trending" });
     }
 
     const recommendations = await getSmartRecommendations({
@@ -34,11 +30,7 @@ export const getRecommendations = async (
       limit: Number(limit) || 10,
     });
 
-    return res.status(200).json({
-      success: true,
-      data: recommendations,
-      source: "personalized",
-    });
+    return res.status(200).json({ success: true, data: recommendations, source: "personalized" });
   } catch (error) {
     next(error);
   }
@@ -69,19 +61,15 @@ export const aiChat = async (
   try {
     const { message, history = [] } = req.body;
 
+    const userId = req.user?.id;
+
     if (!message || message.trim().length === 0) {
-      return res.status(400).json({
-        success: false,
-        message: "Message is required.",
-      });
+      return res.status(400).json({ success: false, message: "Message is required." });
     }
 
-    const reply = await chatWithBookSansarAI(message, history);
+    const reply = await chatWithBookSansarAI(message, history, userId);
 
-    return res.status(200).json({
-      success: true,
-      data: { reply },
-    });
+    return res.status(200).json({ success: true, data: { reply } });
   } catch (error) {
     next(error);
   }
@@ -94,20 +82,11 @@ export const smartSearch = async (
 ) => {
   try {
     const query = req.query.q as string;
-
     if (!query) {
-      return res.status(400).json({
-        success: false,
-        message: "Search query is required.",
-      });
+      return res.status(400).json({ success: false, message: "Search query is required." });
     }
-
     const results = await aiSearch(query);
-
-    return res.status(200).json({
-      success: true,
-      data: results,
-    });
+    return res.status(200).json({ success: true, data: results });
   } catch (error) {
     next(error);
   }
