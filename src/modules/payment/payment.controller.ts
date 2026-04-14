@@ -22,8 +22,6 @@ export const initiateEsewaPayment = async (req: Request, res: Response) => {
       shippingAddress,
       shippingMethod,
       shippingCost,
-      subtotal,
-      totalAmount,
     } = req.body;
 
     if (!items?.length) {
@@ -38,7 +36,7 @@ export const initiateEsewaPayment = async (req: Request, res: Response) => {
       const book = bookMap.get(String(item.bookId));
       if (!book) throw new Error(`Book ${item.bookId} not found`);
       if (!book.vendorId) {
-        throw new Error(`Book "${book.title}" has no vendor assigned. Cannot process order.`);
+        throw new Error(`Book "${book.title}" has no vendor assigned.`);
       }
       return {
         bookId: book._id,
@@ -51,22 +49,28 @@ export const initiateEsewaPayment = async (req: Request, res: Response) => {
       };
     });
 
-    // ── Book price only (no delivery) ──────────────────────────
+    const uniqueVendorIds = [
+      ...new Set(resolvedItems.map((i: any) => String(i.vendorId))),
+    ];
+
+    if (uniqueVendorIds.length > 1) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "Your cart contains books from multiple vendors. Please checkout books from one vendor at a time for correct payment processing.",
+        data: {
+          vendorCount: uniqueVendorIds.length,
+          hint: "Remove books from other vendors and checkout separately.",
+        },
+      });
+    }
+
     const verifiedSubtotal = resolvedItems.reduce(
-      (sum: number, i: any) => sum + i.price,
-      0,
+      (sum: number, i: any) => sum + i.price, 0,
     );
-
-    // ── Delivery charge — goes entirely to rider ────────────────
-    // Use actual shipping cost from request, validated on backend
     const verifiedShippingCost = shippingCost ?? 0;
-
     const verifiedTotal = verifiedSubtotal + verifiedShippingCost;
-
     const transactionUuid = `BS-${Date.now()}`;
-
-    // ── FIX: pass book price and delivery SEPARATELY ───────────
-    // calculateEscrow now knows to only commission the book price
     const escrow = calculateEscrow(verifiedSubtotal, verifiedShippingCost);
 
     const order = new Order({
@@ -80,31 +84,18 @@ export const initiateEsewaPayment = async (req: Request, res: Response) => {
       subtotal: verifiedSubtotal,
       totalAmount: verifiedTotal,
       status: "pending_payment",
-      payment: {
-        method: "esewa",
-        transactionUuid,
-      },
-      escrow: {
-        status: "holding",
-        ...escrow,
-      },
+      payment: { method: "esewa", transactionUuid },
+      escrow: { status: "holding", ...escrow },
       statusHistory: [{ status: "pending_payment", changedAt: new Date() }],
     });
 
     await order.save();
 
-    const formData = buildEsewaFormData({
-      amount: verifiedTotal,
-      transactionUuid,
-    });
+    const formData = buildEsewaFormData({ amount: verifiedTotal, transactionUuid });
 
     return res.status(201).json({
       success: true,
-      data: {
-        formData,
-        paymentUrl: ESEWA_PAYMENT_URL,
-        orderId: transactionUuid,
-      },
+      data: { formData, paymentUrl: ESEWA_PAYMENT_URL, orderId: transactionUuid },
     });
   } catch (err: any) {
     logger.error("eSewa initiate error");
@@ -157,12 +148,10 @@ export const verifyEsewaPaymentCallback = async (req: Request, res: Response) =>
         orderId: order.orderId,
         totalAmount: order.totalAmount,
         escrow: {
-          ...order.escrow,
-          // Show the breakdown clearly
           bookPrice: order.escrow.grossAmount,
           bookSansarCommission: order.escrow.commissionAmount,
           vendorReceives: order.escrow.vendorAmount,
-          riderReceives: order.escrow.riderAmount,
+          riderReceives: (order.escrow as any).riderAmount ?? 0,
         },
       },
     });

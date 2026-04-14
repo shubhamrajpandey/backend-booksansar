@@ -17,7 +17,6 @@ export const getProfile = async (req: Request, res: Response) => {
     let stats = await ReadingStats.findOne({ userId });
     if (!stats) stats = await ReadingStats.create({ userId });
 
-    // ── AUTO-DECAY: reset streak if user hasn't read today or yesterday ──
     if (stats.lastReadDate && stats.currentStreak > 0) {
       const today = Date.UTC(
         new Date().getUTCFullYear(),
@@ -32,7 +31,7 @@ export const getProfile = async (req: Request, res: Response) => {
       const daysSince = (today - lastRead) / 86_400_000;
 
       if (daysSince > 1) {
-        // Check streak freeze
+
         if (
           daysSince === 2 &&
           stats.streakFreezeCount > 0 &&
@@ -186,7 +185,7 @@ export const getOrders = async (req: Request, res: Response) => {
         .sort({ createdAt: -1 })
         .skip(skip)
         .limit(limit)
-        .select("-statusHistory"), // strip verbose history for list view
+        .select("-statusHistory"),
       Order.countDocuments({ customerId: userId }),
     ]);
 

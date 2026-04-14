@@ -3,6 +3,7 @@ import { Payout } from "./payout.model";
 import Vendor from "../vendor/vendor.model";
 import { Order } from "../order/order.model";
 
+//Request Payout
 export const requestPayout = async (req: Request, res: Response) => {
   try {
     const userId = (req as any).user?.id;
@@ -10,19 +11,17 @@ export const requestPayout = async (req: Request, res: Response) => {
 
     const vendor = await Vendor.findOne({ userId });
     if (!vendor) {
-      return res
-        .status(404)
-        .json({ success: false, message: "Vendor profile not found" });
+      return res.status(404).json({ success: false, message: "Vendor profile not found" });
     }
+
     const existing = await Payout.findOne({
       vendorId: vendor._id,
-      status: "pending",
+      status: { $in: ["pending", "processing"] },
     });
     if (existing) {
       return res.status(400).json({
         success: false,
-        message:
-          "You already have a pending payout request. Wait for it to be processed.",
+        message: "You already have a pending payout request. Wait for it to be processed.",
       });
     }
 
@@ -31,7 +30,7 @@ export const requestPayout = async (req: Request, res: Response) => {
         $match: {
           "items.vendorId": vendor._id,
           status: {
-            $in: ["payment_received", "confirmed", "shipped", "delivered"],
+            $in: ["payment_received", "confirmed", "assigned", "picked_up", "in_transit", "shipped", "delivered"],
           },
         },
       },
@@ -40,19 +39,38 @@ export const requestPayout = async (req: Request, res: Response) => {
           _id: null,
           totalGross: { $sum: "$escrow.grossAmount" },
           totalCommission: { $sum: "$escrow.commissionAmount" },
-          totalVendor: { $sum: "$escrow.vendorAmount" },
+          totalVendorAmount: { $sum: "$escrow.vendorAmount" },
         },
       },
     ]);
 
-    const grossAmount = earningsResult[0]?.totalGross ?? 0;
-    const commissionAmount = earningsResult[0]?.totalCommission ?? 0;
-    const netAmount = earningsResult[0]?.totalVendor ?? 0;
+    const totalGross = earningsResult[0]?.totalGross ?? 0;
+    const totalCommission = earningsResult[0]?.totalCommission ?? 0;
+    const totalEarned = earningsResult[0]?.totalVendorAmount ?? 0;
 
-    if (netAmount <= 0) {
+    const alreadyPaidResult = await Payout.aggregate([
+      {
+        $match: {
+          vendorId: vendor._id,
+          status: "paid",
+        },
+      },
+      {
+        $group: {
+          _id: null,
+          totalPaidOut: { $sum: "$netAmount" },
+        },
+      },
+    ]);
+
+    const totalPaidOut = alreadyPaidResult[0]?.totalPaidOut ?? 0;
+
+    const availableBalance = Math.max(0, totalEarned - totalPaidOut);
+
+    if (availableBalance <= 0) {
       return res.status(400).json({
         success: false,
-        message: "No earnings available to request payout.",
+        message: "No available balance to request payout. All earnings have already been paid out.",
       });
     }
 
@@ -60,9 +78,9 @@ export const requestPayout = async (req: Request, res: Response) => {
     const payout = await Payout.create({
       payoutId,
       vendorId: vendor._id,
-      requestedAmount: grossAmount,
-      commissionDeducted: commissionAmount,
-      netAmount,
+      requestedAmount: totalGross,
+      commissionDeducted: totalCommission,
+      netAmount: availableBalance,
       esewaId: vendor.esewaId,
       status: "pending",
       note,
@@ -74,34 +92,27 @@ export const requestPayout = async (req: Request, res: Response) => {
       data: payout,
     });
   } catch (err) {
-    return res
-      .status(500)
-      .json({ success: false, message: "Failed to request payout" });
+    return res.status(500).json({ success: false, message: "Failed to request payout" });
   }
 };
 
+//Get My Payouts
 export const getMyPayouts = async (req: Request, res: Response) => {
   try {
     const userId = (req as any).user?.id;
     const vendor = await Vendor.findOne({ userId });
     if (!vendor) {
-      return res
-        .status(404)
-        .json({ success: false, message: "Vendor profile not found" });
+      return res.status(404).json({ success: false, message: "Vendor profile not found" });
     }
 
-    const payouts = await Payout.find({ vendorId: vendor._id }).sort({
-      createdAt: -1,
-    });
-
+    const payouts = await Payout.find({ vendorId: vendor._id }).sort({ createdAt: -1 });
     return res.json({ success: true, data: payouts });
   } catch (err) {
-    return res
-      .status(500)
-      .json({ success: false, message: "Failed to fetch payouts" });
+    return res.status(500).json({ success: false, message: "Failed to fetch payouts" });
   }
 };
 
+//Get All Payouts
 export const getAllPayouts = async (req: Request, res: Response) => {
   try {
     const { status, page = 1, limit = 20 } = req.query;
@@ -134,12 +145,11 @@ export const getAllPayouts = async (req: Request, res: Response) => {
       },
     });
   } catch (err) {
-    return res
-      .status(500)
-      .json({ success: false, message: "Failed to fetch payouts" });
+    return res.status(500).json({ success: false, message: "Failed to fetch payouts" });
   }
 };
 
+//Update Payout Status
 export const updatePayoutStatus = async (req: Request, res: Response) => {
   try {
     const { payoutId } = req.params;
@@ -147,22 +157,16 @@ export const updatePayoutStatus = async (req: Request, res: Response) => {
 
     const allowed: string[] = ["processing", "paid", "rejected"];
     if (!allowed.includes(status)) {
-      return res
-        .status(400)
-        .json({ success: false, message: "Invalid status" });
+      return res.status(400).json({ success: false, message: "Invalid status" });
     }
 
     const payout = await Payout.findOne({ payoutId });
     if (!payout) {
-      return res
-        .status(404)
-        .json({ success: false, message: "Payout not found" });
+      return res.status(404).json({ success: false, message: "Payout not found" });
     }
 
     if (payout.status === "paid") {
-      return res
-        .status(400)
-        .json({ success: false, message: "Payout already completed" });
+      return res.status(400).json({ success: false, message: "Payout already completed" });
     }
 
     payout.status = status as any;
@@ -177,12 +181,11 @@ export const updatePayoutStatus = async (req: Request, res: Response) => {
       data: payout,
     });
   } catch (err) {
-    return res
-      .status(500)
-      .json({ success: false, message: "Failed to update payout" });
+    return res.status(500).json({ success: false, message: "Failed to update payout" });
   }
 };
 
+//Get Payout Stats
 export const getPayoutStats = async (_req: Request, res: Response) => {
   try {
     const [byStatus, totals] = await Promise.all([
@@ -205,9 +208,7 @@ export const getPayoutStats = async (_req: Request, res: Response) => {
       ]),
     ]);
 
-    const statusMap = Object.fromEntries(
-      byStatus.map((s: any) => [s._id, s.count]),
-    );
+    const statusMap = Object.fromEntries(byStatus.map((s: any) => [s._id, s.count]));
 
     return res.json({
       success: true,
@@ -222,8 +223,6 @@ export const getPayoutStats = async (_req: Request, res: Response) => {
       },
     });
   } catch (err) {
-    return res
-      .status(500)
-      .json({ success: false, message: "Failed to fetch payout stats" });
+    return res.status(500).json({ success: false, message: "Failed to fetch payout stats" });
   }
 };

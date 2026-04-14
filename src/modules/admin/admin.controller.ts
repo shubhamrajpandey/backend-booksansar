@@ -86,6 +86,7 @@ export const getAllUsers = async (req: Request, res: Response) => {
   }
 };
 
+//Delete User
 export const deleteUser = async (req: Request, res: Response) => {
   try {
     const user = await User.findByIdAndDelete(req.params.id);
@@ -109,6 +110,7 @@ export const deleteUser = async (req: Request, res: Response) => {
   }
 };
 
+//Update Vendor Status
 export const updateVendorStatus = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
@@ -380,6 +382,7 @@ export const getAllCategories = async (req: Request, res: Response) => {
   }
 };
 
+//Get Category By Id
 export const getCategoryById = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
@@ -418,6 +421,7 @@ export const getCategoryById = async (req: Request, res: Response) => {
   }
 };
 
+//Add Category
 export const addCategory = async (req: Request, res: Response) => {
   try {
     const { name, description } = req.body;
@@ -473,6 +477,7 @@ export const addCategory = async (req: Request, res: Response) => {
   }
 };
 
+//Update Category
 export const updateCategory = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
@@ -544,6 +549,7 @@ export const updateCategory = async (req: Request, res: Response) => {
   }
 };
 
+//Delete Category
 export const deleteCategory = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
@@ -641,6 +647,7 @@ export const getGenres = async (req: Request, res: Response) => {
   }
 };
 
+//Add Genre
 export const addGenre = async (req: Request, res: Response) => {
   try {
     const { name } = req.body;
@@ -684,6 +691,7 @@ export const addGenre = async (req: Request, res: Response) => {
   }
 };
 
+//Delete Genre
 export const deleteGenre = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
@@ -721,6 +729,7 @@ export const deleteGenre = async (req: Request, res: Response) => {
   }
 };
 
+//Update Genre
 export const updateGenre = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
@@ -794,7 +803,7 @@ export const updateGenre = async (req: Request, res: Response) => {
   }
 };
 
-//get active categories for book addition
+//Get Active Categories
 export const getActiveCategories = async (req: Request, res: Response) => {
   try {
     const categories = await Category.find({ isActive: true }).sort({
@@ -1072,8 +1081,6 @@ export const getPlatformStats = async (req: Request, res: Response) => {
     });
   }
 };
-
-// ==================== DASHBOARD FUNCTIONS (ADD THESE 4 FUNCTIONS) ====================
 
 // GET /admin/dashboard/stats
 export const getAdminDashboardStats = async (req: Request, res: Response) => {
