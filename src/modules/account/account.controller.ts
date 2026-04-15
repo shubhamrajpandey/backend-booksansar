@@ -14,8 +14,11 @@ export const getProfile = async (req: Request, res: Response) => {
     const user = await User.findById(userId).select("-password");
     if (!user) return res.status(404).json({ message: "User not found" });
 
-    let stats = await ReadingStats.findOne({ userId });
-    if (!stats) stats = await ReadingStats.create({ userId });
+    let stats = await ReadingStats.findOneAndUpdate(
+      { userId },
+      { $setOnInsert: { userId } },
+      { new: true, upsert: true, setDefaultsOnInsert: true }
+    );
 
     if (stats.lastReadDate && stats.currentStreak > 0) {
       const today = Date.UTC(
@@ -119,11 +122,11 @@ export const getReadingStats = async (req: Request, res: Response) => {
   try {
     const userId = req.user?.id;
 
-    let stats = await ReadingStats.findOne({ userId });
-
-    if (!stats) {
-      stats = await ReadingStats.create({ userId });
-    }
+    let stats = await ReadingStats.findOneAndUpdate(
+      { userId },
+      { $setOnInsert: { userId } },
+      { new: true, upsert: true, setDefaultsOnInsert: true }
+    );
 
     res.status(200).json({ stats });
   } catch (error) {
@@ -137,11 +140,11 @@ export const updateStreak = async (req: Request, res: Response) => {
   try {
     const userId = req.user?.id;
 
-    let stats = await ReadingStats.findOne({ userId });
-
-    if (!stats) {
-      stats = await ReadingStats.create({ userId });
-    }
+    let stats = await ReadingStats.findOneAndUpdate(
+      { userId },
+      { $setOnInsert: { userId } },
+      { new: true, upsert: true, setDefaultsOnInsert: true }
+    );
 
     const today = new Date().setHours(0, 0, 0, 0);
     const lastRead = stats.lastReadDate
@@ -210,11 +213,11 @@ export const getPreferences = async (req: Request, res: Response) => {
   try {
     const userId = req.user?.id;
 
-    let preferences = await UserPreferences.findOne({ userId });
-
-    if (!preferences) {
-      preferences = await UserPreferences.create({ userId });
-    }
+    let preferences = await UserPreferences.findOneAndUpdate(
+      { userId },
+      { $setOnInsert: { userId } },
+      { new: true, upsert: true, setDefaultsOnInsert: true }
+    );
 
     res.status(200).json({ preferences });
   } catch (error) {
@@ -229,22 +232,16 @@ export const updatePreferences = async (req: Request, res: Response) => {
     const userId = req.user?.id;
     const { notifications, theme, language } = req.body;
 
-    let preferences = await UserPreferences.findOne({ userId });
+    const updatePayload: any = {};
+    if (notifications) updatePayload.notifications = notifications;
+    if (theme) updatePayload.theme = theme;
+    if (language) updatePayload.language = language;
 
-    if (!preferences) {
-      preferences = await UserPreferences.create({
-        userId,
-        notifications,
-        theme,
-        language,
-      });
-    } else {
-      if (notifications) preferences.notifications = notifications;
-      if (theme) preferences.theme = theme;
-      if (language) preferences.language = language;
-
-      await preferences.save();
-    }
+    let preferences = await UserPreferences.findOneAndUpdate(
+      { userId },
+      { $set: updatePayload, $setOnInsert: { userId } },
+      { new: true, upsert: true, setDefaultsOnInsert: true }
+    );
 
     res.status(200).json({
       message: "Preferences updated successfully",
