@@ -33,17 +33,19 @@ export interface IShippingAddress {
   province: string;
   country: string;
   shippingNote?: string;
+  latitude?: number;
+  longitude?: number;
 }
 
 export interface IEscrow {
   status: EscrowStatus;
-  grossAmount: number;        // book price only
-  commissionRate: number;     // 0.03
-  commissionAmount: number;   // 3% of book price → BookSansar keeps
-  vendorAmount: number;       // book price - commission → vendor gets
-  deliveryCharge: number;     // ← new: full delivery cost
-  riderAmount: number;        // ← new: rider gets full delivery charge
-  totalAmount: number;        // ← new: grossAmount + deliveryCharge
+  grossAmount: number;
+  commissionRate: number;
+  commissionAmount: number;
+  vendorAmount: number;
+  deliveryCharge: number;
+  riderAmount: number;
+  totalAmount: number;
   releasedAt?: Date;
 }
 

@@ -2,12 +2,13 @@ import { Request, Response } from "express";
 import { StatusCodes } from "http-status-codes";
 import { Order } from "../order/order.model";
 import User from "../user/user.model";
+import { RiderPayout } from "./rider.payout.model";
+import RiderApplication from "./rider.application.model";
 import mongoose from "mongoose";
 
 export const getRiderOrders = async (req: Request, res: Response) => {
     try {
         const riderId = req.user?.id;
-
         const orders = await Order.find({
             riderId: new mongoose.Types.ObjectId(riderId),
             status: { $in: ["assigned", "picked_up", "in_transit"] },
@@ -24,13 +25,9 @@ export const getRiderOrders = async (req: Request, res: Response) => {
             deliveryAddress: order.shippingAddress
                 ? `${order.shippingAddress.address}, ${order.shippingAddress.city}, ${order.shippingAddress.province}`
                 : "",
-            books: (order.items || []).map((item: any) => ({
-                title: item.title,
-                quantity: 1,
-            })),
+            books: (order.items || []).map((item: any) => ({ title: item.title, quantity: 1 })),
             totalAmount: order.totalAmount || 0,
-            // ── Rider sees delivery charge they will earn ──
-            deliveryEarning: order.escrow?.riderAmount || order.shippingCost || 0,
+            deliveryEarning: (order as any).escrow?.riderAmount || order.shippingCost || 0,
             status: order.status,
             createdAt: order.createdAt,
         }));
@@ -85,7 +82,6 @@ export const updateOrderStatus = async (req: Request, res: Response) => {
         }
 
         await order.save();
-
         return res.status(StatusCodes.OK).json({
             success: true,
             message: `Order marked as ${status.replace(/_/g, " ")}.`,
@@ -101,7 +97,6 @@ export const updateOrderStatus = async (req: Request, res: Response) => {
 export const getActiveDelivery = async (req: Request, res: Response) => {
     try {
         const riderId = req.user?.id;
-
         const order = await Order.findOne({
             riderId: new mongoose.Types.ObjectId(riderId),
             status: "in_transit",
@@ -109,19 +104,19 @@ export const getActiveDelivery = async (req: Request, res: Response) => {
             .populate("customerId", "name phoneNumber")
             .lean() as any;
 
-        if (!order) {
-            return res.status(StatusCodes.OK).json({ success: true, data: null });
-        }
+        if (!order) return res.status(StatusCodes.OK).json({ success: true, data: null });
 
+        const addr = order.shippingAddress;
         return res.status(StatusCodes.OK).json({
             success: true,
             data: {
                 orderId: order._id,
                 customerName: order.customerId?.name || "Customer",
-                address: order.shippingAddress
-                    ? `${order.shippingAddress.address}, ${order.shippingAddress.city}`
-                    : "",
-                coordinates: null,
+                customerPhone: order.customerId?.phoneNumber || order.contact || "",
+                address: addr ? `${addr.address}, ${addr.city}` : "",
+                coordinates: addr?.latitude && addr?.longitude
+                    ? { latitude: addr.latitude, longitude: addr.longitude }
+                    : null,
             },
         });
     } catch (error: unknown) {
@@ -165,7 +160,6 @@ export const getRiderHistory = async (req: Request, res: Response) => {
                 ? `${order.shippingAddress.address}, ${order.shippingAddress.city}`
                 : "",
             totalAmount: order.totalAmount || 0,
-            // ── FIX: rider earned the delivery charge, not % of total ──
             riderEarning: (order as any).escrow?.riderAmount || order.shippingCost || 0,
             status: "delivered",
             deliveredAt: order.deliveredAt || order.updatedAt,
@@ -187,56 +181,15 @@ export const getRiderStats = async (req: Request, res: Response) => {
 
         const [totalDeliveries, thisMonthDeliveries, earningsData, recentEarningsData] =
             await Promise.all([
-                Order.countDocuments({
-                    riderId: new mongoose.Types.ObjectId(riderId),
-                    status: "delivered",
-                }),
-                Order.countDocuments({
-                    riderId: new mongoose.Types.ObjectId(riderId),
-                    status: "delivered",
-                    deliveredAt: { $gte: startOfMonth },
-                }),
-                // ── FIX: sum escrow.riderAmount (delivery charges) ──────
+                Order.countDocuments({ riderId: new mongoose.Types.ObjectId(riderId), status: "delivered" }),
+                Order.countDocuments({ riderId: new mongoose.Types.ObjectId(riderId), status: "delivered", deliveredAt: { $gte: startOfMonth } }),
                 Order.aggregate([
-                    {
-                        $match: {
-                            riderId: new mongoose.Types.ObjectId(riderId),
-                            status: "delivered",
-                        },
-                    },
-                    {
-                        $group: {
-                            _id: null,
-                            // Use riderAmount from escrow, fallback to shippingCost
-                            total: {
-                                $sum: {
-                                    $ifNull: ["$escrow.riderAmount", "$shippingCost"],
-                                },
-                            },
-                        },
-                    },
+                    { $match: { riderId: new mongoose.Types.ObjectId(riderId), status: "delivered" } },
+                    { $group: { _id: null, total: { $sum: { $ifNull: ["$escrow.riderAmount", "$shippingCost"] } } } },
                 ]),
-                // Pending payout = last 30 days deliveries not yet paid
                 Order.aggregate([
-                    {
-                        $match: {
-                            riderId: new mongoose.Types.ObjectId(riderId),
-                            status: "delivered",
-                            deliveredAt: {
-                                $gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000),
-                            },
-                        },
-                    },
-                    {
-                        $group: {
-                            _id: null,
-                            total: {
-                                $sum: {
-                                    $ifNull: ["$escrow.riderAmount", "$shippingCost"],
-                                },
-                            },
-                        },
-                    },
+                    { $match: { riderId: new mongoose.Types.ObjectId(riderId), status: "delivered", deliveredAt: { $gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) } } },
+                    { $group: { _id: null, total: { $sum: { $ifNull: ["$escrow.riderAmount", "$shippingCost"] } } } },
                 ]),
             ]);
 
@@ -274,65 +227,122 @@ export const requestPayout = async (req: Request, res: Response) => {
     }
 };
 
+// ─────────────────────────────────────────────────────────────
+// GET /api/v1/rider/admin/earnings  (admin only)
+// Returns all riders with earnings minus already paid amounts
+// ─────────────────────────────────────────────────────────────
 export const getRiderEarningsAdmin = async (req: Request, res: Response) => {
     try {
+        // Step 1: Get total earnings per rider from orders
         const earnings = await Order.aggregate([
             { $match: { status: "delivered", riderId: { $exists: true, $ne: null } } },
             {
                 $group: {
                     _id: "$riderId",
                     totalDeliveries: { $sum: 1 },
-                    // Sum escrow.riderAmount (delivery charge), fallback to shippingCost
-                    totalEarnings: {
-                        $sum: { $ifNull: ["$escrow.riderAmount", "$shippingCost"] },
-                    },
-                    // Last 30 days = pending payout
-                    pendingPayout: {
-                        $sum: {
-                            $cond: [
-                                {
-                                    $gte: [
-                                        "$deliveredAt",
-                                        new Date(Date.now() - 30 * 24 * 60 * 60 * 1000),
-                                    ],
-                                },
-                                { $ifNull: ["$escrow.riderAmount", "$shippingCost"] },
-                                0,
-                            ],
-                        },
-                    },
+                    totalEarnings: { $sum: { $ifNull: ["$escrow.riderAmount", "$shippingCost"] } },
                 },
             },
+            { $lookup: { from: "users", localField: "_id", foreignField: "_id", as: "rider" } },
+            { $unwind: { path: "$rider", preserveNullAndEmptyArrays: true } },
+            // Get eSewa ID from rider application
             {
                 $lookup: {
-                    from: "users",
+                    from: "riderapplications",
                     localField: "_id",
-                    foreignField: "_id",
-                    as: "rider",
+                    foreignField: "riderId",
+                    as: "application",
                 },
             },
-            { $unwind: { path: "$rider", preserveNullAndEmptyArrays: true } },
+            { $unwind: { path: "$application", preserveNullAndEmptyArrays: true } },
             {
                 $project: {
                     _id: 1,
                     name: "$rider.name",
                     email: "$rider.email",
                     phoneNumber: "$rider.phoneNumber",
+                    esewaId: "$application.esewaId",
                     totalDeliveries: 1,
                     totalEarnings: 1,
-                    pendingPayout: 1,
                 },
             },
-            { $sort: { pendingPayout: -1 } },
+            { $sort: { totalEarnings: -1 } },
         ]);
 
-        return res.status(StatusCodes.OK).json({ success: true, data: earnings });
+        // Step 2: For each rider, subtract already paid amounts
+        const riderIds = earnings.map((e: any) => e._id);
+        const paidPayouts = await RiderPayout.aggregate([
+            { $match: { riderId: { $in: riderIds }, status: "paid" } },
+            { $group: { _id: "$riderId", totalPaid: { $sum: "$amount" } } },
+        ]);
+
+        const paidMap = new Map(
+            paidPayouts.map((p: any) => [String(p._id), p.totalPaid]),
+        );
+
+        // Step 3: Calculate available (pending) balance
+        const result = earnings.map((rider: any) => {
+            const totalPaid = paidMap.get(String(rider._id)) || 0;
+            const pendingPayout = Math.max(0, rider.totalEarnings - totalPaid);
+            return {
+                ...rider,
+                totalPaid,
+                pendingPayout,
+            };
+        });
+
+        return res.status(StatusCodes.OK).json({ success: true, data: result });
     } catch (error: unknown) {
         if (error instanceof Error) {
-            return res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({
+            return res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({ success: false, message: error.message });
+        }
+    }
+};
+
+// ─────────────────────────────────────────────────────────────
+// POST /api/v1/rider/admin/pay  (admin only)
+// Admin records a payout to a rider — saves to DB
+// ─────────────────────────────────────────────────────────────
+export const payRider = async (req: Request, res: Response) => {
+    try {
+        const { riderId, amount, note } = req.body;
+
+        if (!riderId || !amount) {
+            return res.status(StatusCodes.BAD_REQUEST).json({
                 success: false,
-                message: error.message,
+                message: "riderId and amount are required.",
             });
+        }
+
+        const rider = await User.findOne({ _id: riderId, role: "rider" });
+        if (!rider) {
+            return res.status(StatusCodes.NOT_FOUND).json({
+                success: false,
+                message: "Rider not found.",
+            });
+        }
+
+        // Get eSewa ID from rider application
+        const application = await RiderApplication.findOne({ riderId });
+
+        const payout = await RiderPayout.create({
+            payoutId: `RPAY-${Date.now()}`,
+            riderId,
+            amount: Number(amount),
+            esewaId: application?.esewaId || "",
+            status: "paid",
+            note,
+            processedAt: new Date(),
+        });
+
+        return res.status(StatusCodes.CREATED).json({
+            success: true,
+            message: `Rs. ${amount} payout recorded for ${rider.name}.`,
+            data: payout,
+        });
+    } catch (error: unknown) {
+        if (error instanceof Error) {
+            return res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({ success: false, message: error.message });
         }
     }
 };

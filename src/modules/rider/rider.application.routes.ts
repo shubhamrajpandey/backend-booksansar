@@ -15,6 +15,7 @@ import {
   getRiderStats,
   requestPayout,
   getRiderEarningsAdmin,
+  payRider,              // ← new
 } from "./rider.controller";
 import { authenticateToken } from "../../middlewares/auth.middleware";
 import { verifyRole } from "../../middlewares/role.middleware";
@@ -22,10 +23,9 @@ import { verifyRole } from "../../middlewares/role.middleware";
 const router = Router();
 
 // ── Public ───────────────────────────────────────────────────
-// Anyone can submit a rider application (no auth needed)
 router.post("/apply", applyAsRider);
 
-// ── Rider operational routes (role: rider) ───────────────────
+// ── Rider operational routes ─────────────────────────────────
 router.get("/orders", authenticateToken, verifyRole("rider"), getRiderOrders);
 router.patch("/orders/:id/status", authenticateToken, verifyRole("rider"), updateOrderStatus);
 router.get("/active-delivery", authenticateToken, verifyRole("rider"), getActiveDelivery);
@@ -34,15 +34,11 @@ router.get("/history", authenticateToken, verifyRole("rider"), getRiderHistory);
 router.get("/stats", authenticateToken, verifyRole("rider"), getRiderStats);
 router.post("/payout-request", authenticateToken, verifyRole("rider"), requestPayout);
 
-// ── Admin only routes (role: admin) ─────────────────────────
+// ── Admin routes ─────────────────────────────────────────────
+router.get("/admin/earnings", authenticateToken, verifyRole("admin"), getRiderEarningsAdmin);
+router.post("/admin/pay", authenticateToken, verifyRole("admin"), payRider);  // ← new
+
 router.get("/applications", authenticateToken, verifyRole("admin"), getAllApplications);
-// Admin — rider earnings overview
-router.get(
-  "/admin/earnings",
-  authenticateToken,
-  verifyRole("admin"),
-  getRiderEarningsAdmin,
-);
 router.get("/applications/:id", authenticateToken, verifyRole("admin"), getApplicationById);
 router.patch("/applications/:id/approve", authenticateToken, verifyRole("admin"), approveApplication);
 router.patch("/applications/:id/reject", authenticateToken, verifyRole("admin"), rejectApplication);

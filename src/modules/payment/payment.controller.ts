@@ -19,7 +19,7 @@ export const initiateEsewaPayment = async (req: Request, res: Response) => {
     const {
       items,
       contact,
-      shippingAddress,
+      shippingAddress,  // ← now includes latitude and longitude from Leaflet
       shippingMethod,
       shippingCost,
     } = req.body;
@@ -49,25 +49,18 @@ export const initiateEsewaPayment = async (req: Request, res: Response) => {
       };
     });
 
+    // ── Multi-vendor check ────────────────────────────────────
     const uniqueVendorIds = [
       ...new Set(resolvedItems.map((i: any) => String(i.vendorId))),
     ];
-
     if (uniqueVendorIds.length > 1) {
       return res.status(400).json({
         success: false,
-        message:
-          "Your cart contains books from multiple vendors. Please checkout books from one vendor at a time for correct payment processing.",
-        data: {
-          vendorCount: uniqueVendorIds.length,
-          hint: "Remove books from other vendors and checkout separately.",
-        },
+        message: "Please checkout books from one vendor at a time.",
       });
     }
 
-    const verifiedSubtotal = resolvedItems.reduce(
-      (sum: number, i: any) => sum + i.price, 0,
-    );
+    const verifiedSubtotal = resolvedItems.reduce((sum: number, i: any) => sum + i.price, 0);
     const verifiedShippingCost = shippingCost ?? 0;
     const verifiedTotal = verifiedSubtotal + verifiedShippingCost;
     const transactionUuid = `BS-${Date.now()}`;
@@ -78,7 +71,19 @@ export const initiateEsewaPayment = async (req: Request, res: Response) => {
       customerId,
       contact,
       items: resolvedItems,
-      shippingAddress,
+      // ── shippingAddress now includes lat/lng from Leaflet ──
+      shippingAddress: {
+        firstName: shippingAddress.firstName,
+        lastName: shippingAddress.lastName,
+        address: shippingAddress.address,
+        city: shippingAddress.city,
+        postalCode: shippingAddress.postalCode,
+        province: shippingAddress.province,
+        country: shippingAddress.country,
+        shippingNote: shippingAddress.shippingNote,
+        latitude: shippingAddress.latitude ?? null,   // ← from map
+        longitude: shippingAddress.longitude ?? null, // ← from map
+      },
       shippingMethod: shippingMethod || "standard",
       shippingCost: verifiedShippingCost,
       subtotal: verifiedSubtotal,
@@ -108,17 +113,11 @@ export const initiateEsewaPayment = async (req: Request, res: Response) => {
 
 export const verifyEsewaPaymentCallback = async (req: Request, res: Response) => {
   const { data } = req.query;
-
-  if (!data) {
-    return res.status(400).json({ success: false, message: "No payment data received" });
-  }
+  if (!data) return res.status(400).json({ success: false, message: "No payment data received" });
 
   try {
     const result = await verifyEsewaPayment(data as string);
-
-    if (!result.verified) {
-      return res.status(400).json({ success: false, message: "Payment verification failed" });
-    }
+    if (!result.verified) return res.status(400).json({ success: false, message: "Payment verification failed" });
 
     const order = await Order.findOneAndUpdate(
       { orderId: result.transactionUuid, status: "pending_payment" },
@@ -137,9 +136,7 @@ export const verifyEsewaPaymentCallback = async (req: Request, res: Response) =>
       { new: true },
     );
 
-    if (!order) {
-      return res.status(200).json({ success: true, message: "Already processed" });
-    }
+    if (!order) return res.status(200).json({ success: true, message: "Already processed" });
 
     return res.json({
       success: true,
