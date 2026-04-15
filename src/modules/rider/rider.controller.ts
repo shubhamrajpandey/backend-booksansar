@@ -97,16 +97,21 @@ export const updateOrderStatus = async (req: Request, res: Response) => {
 export const getActiveDelivery = async (req: Request, res: Response) => {
     try {
         const riderId = req.user?.id;
+
         const order = await Order.findOne({
             riderId: new mongoose.Types.ObjectId(riderId),
-            status: "in_transit",
+            status: { $in: ["assigned", "picked_up", "in_transit"] },
         })
             .populate("customerId", "name phoneNumber")
+            .sort({ createdAt: -1 })
             .lean() as any;
 
-        if (!order) return res.status(StatusCodes.OK).json({ success: true, data: null });
+        if (!order) {
+            return res.status(StatusCodes.OK).json({ success: true, data: null });
+        }
 
         const addr = order.shippingAddress;
+
         return res.status(StatusCodes.OK).json({
             success: true,
             data: {
@@ -114,14 +119,19 @@ export const getActiveDelivery = async (req: Request, res: Response) => {
                 customerName: order.customerId?.name || "Customer",
                 customerPhone: order.customerId?.phoneNumber || order.contact || "",
                 address: addr ? `${addr.address}, ${addr.city}` : "",
-                coordinates: addr?.latitude && addr?.longitude
-                    ? { latitude: addr.latitude, longitude: addr.longitude }
-                    : null,
+                status: order.status,
+                coordinates:
+                    addr?.latitude && addr?.longitude
+                        ? { latitude: addr.latitude, longitude: addr.longitude }
+                        : null,
             },
         });
     } catch (error: unknown) {
         if (error instanceof Error) {
-            return res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({ success: false, message: error.message });
+            return res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({
+                success: false,
+                message: error.message,
+            });
         }
     }
 };

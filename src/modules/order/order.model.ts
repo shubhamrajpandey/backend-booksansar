@@ -111,6 +111,8 @@ const OrderSchema = new Schema<IOrder>(
       province: { type: String },
       country: { type: String },
       shippingNote: { type: String },
+      latitude: { type: Number, default: null },
+      longitude: { type: Number, default: null },
     },
 
     shippingMethod: {
