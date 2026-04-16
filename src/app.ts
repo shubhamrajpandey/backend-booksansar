@@ -27,6 +27,7 @@ import notificationRoutes from "./modules/notification/notification.routes";
 import vendorDashboardRoutes from "./modules/vendor/vendor.dashboard.routes";
 import aiRoutes from "./modules/ai/ai.routes";
 import riderRoutes from "./modules/rider/rider.application.routes";
+import commentRoutes from "./modules/comment/comment.routes";
 
 const app = express();
 const v1Router = Router();
@@ -68,6 +69,7 @@ v1Router.use("/notifications", notificationRoutes);
 v1Router.use("/vendor/dashboard", vendorDashboardRoutes);
 v1Router.use("/ai", aiRoutes);
 v1Router.use("/rider", riderRoutes);
+v1Router.use("/comments", commentRoutes);
 
 app.use("/api/v1", v1Router);
 
