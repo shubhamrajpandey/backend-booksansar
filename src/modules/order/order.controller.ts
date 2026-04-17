@@ -2,6 +2,7 @@ import { Request, Response } from "express";
 import { Order } from "./order.model";
 import Vendor from "../vendor/vendor.model";
 import User from "../user/user.model";
+import { Payout } from "../payout/payout.model";
 
 export const SHIPPING_RATES = {
   insideValley: 80,
@@ -58,7 +59,7 @@ export const getOrderById = async (req: Request, res: Response) => {
       .populate("customerId", "name email")
       .populate("items.bookId", "title coverImage type")
       .populate("items.vendorId", "storeName")
-      .populate("riderId", "name phoneNumber"); // ← populate rider info
+      .populate("riderId", "name phoneNumber");
 
     if (!order) return res.status(404).json({ success: false, message: "Order not found" });
     return res.json({ success: true, data: order });
@@ -85,7 +86,7 @@ export const getVendorOrders = async (req: Request, res: Response) => {
         .skip(skip)
         .limit(Number(limit))
         .populate("customerId", "name email")
-        .populate("riderId", "name phoneNumber") // ← populate rider
+        .populate("riderId", "name phoneNumber")
         .select("-statusHistory"),
       Order.countDocuments(filter),
     ]);
@@ -100,10 +101,6 @@ export const getVendorOrders = async (req: Request, res: Response) => {
   }
 };
 
-// ─────────────────────────────────────────────────────────────
-// PATCH /api/v1/orders/:orderId/assign-rider  (vendor only)
-// Vendor assigns a rider to their confirmed order
-// ─────────────────────────────────────────────────────────────
 export const assignRiderToOrder = async (req: Request, res: Response) => {
   try {
     const userId = (req as any).user?.id;
@@ -114,17 +111,12 @@ export const assignRiderToOrder = async (req: Request, res: Response) => {
       return res.status(400).json({ success: false, message: "riderId is required" });
     }
 
-    // Verify vendor owns this order
     const vendor = await Vendor.findOne({ userId });
     if (!vendor) return res.status(404).json({ success: false, message: "Vendor not found" });
 
-    const order = await Order.findOne({
-      orderId,
-      "items.vendorId": vendor._id,
-    });
+    const order = await Order.findOne({ orderId, "items.vendorId": vendor._id });
     if (!order) return res.status(404).json({ success: false, message: "Order not found" });
 
-    // Only confirmed orders can be assigned
     if (!["confirmed", "payment_received"].includes(order.status)) {
       return res.status(400).json({
         success: false,
@@ -132,7 +124,6 @@ export const assignRiderToOrder = async (req: Request, res: Response) => {
       });
     }
 
-    // Verify rider exists and has rider role
     const rider = await User.findOne({ _id: riderId, role: "rider", accountStatus: "active" });
     if (!rider) return res.status(404).json({ success: false, message: "Rider not found or not active" });
 
@@ -159,16 +150,11 @@ export const assignRiderToOrder = async (req: Request, res: Response) => {
   }
 };
 
-// ─────────────────────────────────────────────────────────────
-// GET /api/v1/orders/riders  (vendor only)
-// Get list of available active riders for the dropdown
-// ─────────────────────────────────────────────────────────────
 export const getAvailableRiders = async (req: Request, res: Response) => {
   try {
-    const riders = await User.find({ role: "rider" }) // ← remove accountStatus filter
+    const riders = await User.find({ role: "rider" })
       .select("name phoneNumber location")
       .lean();
-
     return res.status(200).json({ success: true, data: riders });
   } catch (err: any) {
     return res.status(500).json({ success: false, message: err.message });
@@ -254,25 +240,83 @@ export const updateOrderStatus = async (req: Request, res: Response) => {
   }
 };
 
+// ─────────────────────────────────────────────────────────────
+// GET /api/v1/orders/admin/vendor-earnings
+// FIXED:
+//   1. Added all new statuses (assigned, picked_up, in_transit)
+//   2. Removed $unwind "$items" — it caused duplicate escrow sums
+//   3. Group by order-level escrow, not per-item
+//   4. releasedAmount = escrow.status "released" (delivered orders)
+//   5. holdingAmount  = escrow.status "holding"  (in-progress orders)
+// ─────────────────────────────────────────────────────────────
 export const getVendorEarnings = async (_req: Request, res: Response) => {
   try {
     const earnings = await Order.aggregate([
-      { $match: { status: { $in: ["payment_received", "confirmed", "shipped", "delivered", "refunded"] } } },
-      { $unwind: "$items" },
+      {
+        // ── Include ALL active order statuses ──────────────────
+        $match: {
+          status: {
+            $in: [
+              "payment_received",
+              "confirmed",
+              "assigned",       // ← was missing
+              "picked_up",      // ← was missing
+              "in_transit",     // ← was missing
+              "shipped",
+              "delivered",
+              "refunded",
+            ],
+          },
+        },
+      },
+      // ── Do NOT unwind items — group at order level ──────────
+      // Each order has ONE vendor so we read vendorId from first item
       {
         $group: {
-          _id: "$items.vendorId",
+          _id: { $arrayElemAt: ["$items.vendorId", 0] }, // first item's vendorId
           totalOrders: { $addToSet: "$_id" },
           grossAmount: { $sum: "$escrow.grossAmount" },
           commissionAmount: { $sum: "$escrow.commissionAmount" },
           vendorAmount: { $sum: "$escrow.vendorAmount" },
-          releasedAmount: { $sum: { $cond: [{ $eq: ["$escrow.status", "released"] }, "$escrow.vendorAmount", 0] } },
-          holdingAmount: { $sum: { $cond: [{ $eq: ["$escrow.status", "holding"] }, "$escrow.vendorAmount", 0] } },
+          // Released = delivered orders (escrow unlocked)
+          releasedAmount: {
+            $sum: {
+              $cond: [
+                { $eq: ["$escrow.status", "released"] },
+                "$escrow.vendorAmount",
+                0,
+              ],
+            },
+          },
+          // Holding = in-progress orders (escrow still locked)
+          holdingAmount: {
+            $sum: {
+              $cond: [
+                { $eq: ["$escrow.status", "holding"] },
+                "$escrow.vendorAmount",
+                0,
+              ],
+            },
+          },
         },
       },
-      { $lookup: { from: "vendors", localField: "_id", foreignField: "_id", as: "vendor" } },
+      {
+        $lookup: {
+          from: "vendors",
+          localField: "_id",
+          foreignField: "_id",
+          as: "vendor",
+        },
+      },
       { $unwind: { path: "$vendor", preserveNullAndEmptyArrays: true } },
-      { $lookup: { from: "users", localField: "vendor.userId", foreignField: "_id", as: "user" } },
+      {
+        $lookup: {
+          from: "users",
+          localField: "vendor.userId",
+          foreignField: "_id",
+          as: "user",
+        },
+      },
       { $unwind: { path: "$user", preserveNullAndEmptyArrays: true } },
       {
         $project: {
@@ -291,20 +335,60 @@ export const getVendorEarnings = async (_req: Request, res: Response) => {
       },
       { $sort: { grossAmount: -1 } },
     ]);
+
     return res.json({ success: true, data: earnings });
   } catch (err) {
     return res.status(500).json({ success: false, message: "Failed to fetch vendor earnings" });
   }
 };
 
+// ─────────────────────────────────────────────────────────────
+// GET /api/v1/orders/admin/stats
+// FIXED:
+//   1. Added all new statuses to revenue match
+//   2. totalPaidOut now reads from ACTUAL paid payouts (Payout model)
+//      not from escrow.vendorAmount (which is what vendors are owed,
+//      not what was actually sent to them via eSewa)
+// ─────────────────────────────────────────────────────────────
 export const getOrderStats = async (_req: Request, res: Response) => {
   try {
-    const [total, byStatus, revenue] = await Promise.all([
+    const [total, byStatus, revenue, actualPayouts] = await Promise.all([
       Order.countDocuments(),
+
       Order.aggregate([{ $group: { _id: "$status", count: { $sum: 1 } } }]),
+
+      // Revenue from all active orders
       Order.aggregate([
-        { $match: { status: { $in: ["payment_received", "confirmed", "shipped", "delivered"] } } },
-        { $group: { _id: null, totalRevenue: { $sum: "$totalAmount" }, totalCommission: { $sum: "$escrow.commissionAmount" }, totalPaidOut: { $sum: "$escrow.vendorAmount" } } },
+        {
+          $match: {
+            status: {
+              $in: [
+                "payment_received",
+                "confirmed",
+                "assigned",
+                "picked_up",
+                "in_transit",
+                "shipped",
+                "delivered",
+              ],
+            },
+          },
+        },
+        {
+          $group: {
+            _id: null,
+            totalRevenue: { $sum: "$totalAmount" },
+            totalCommission: { $sum: "$escrow.commissionAmount" },
+            // This is what vendors are OWED (not what was paid)
+            totalVendorOwed: { $sum: "$escrow.vendorAmount" },
+          },
+        },
+      ]),
+
+      // ── Actual payouts sent to vendors via eSewa ──────────────
+      Payout.aggregate([
+        { $match: { status: "paid" } },
+        { $group: { _id: null, totalPaidOut: { $sum: "$netAmount" } } },
       ]),
     ]);
 
@@ -326,7 +410,10 @@ export const getOrderStats = async (_req: Request, res: Response) => {
         refunded: statusMap["refunded"] ?? 0,
         totalRevenue: revenue[0]?.totalRevenue ?? 0,
         totalCommission: revenue[0]?.totalCommission ?? 0,
-        totalPaidOut: revenue[0]?.totalPaidOut ?? 0,
+        // What vendors are owed from escrow (delivered orders)
+        totalPaidOut: revenue[0]?.totalVendorOwed ?? 0,
+        // What was actually sent to vendors via eSewa
+        actuallyPaidToVendors: actualPayouts[0]?.totalPaidOut ?? 0,
       },
     });
   } catch (err) {
