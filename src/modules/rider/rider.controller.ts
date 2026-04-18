@@ -218,7 +218,52 @@ export const getRiderStats = async (req: Request, res: Response) => {
         }
     }
 };
+export const getRiderProfile = async (req: Request, res: Response) => {
+    try {
+        const riderId = req.user?.id;
 
+        const [rider, application] = await Promise.all([
+            User.findById(riderId).select("-password").lean(),
+            RiderApplication.findOne({ riderId }).lean(),
+        ]);
+
+        if (!rider) {
+            return res.status(StatusCodes.NOT_FOUND).json({
+                success: false,
+                message: "Rider not found.",
+            });
+        }
+
+        return res.status(StatusCodes.OK).json({
+            success: true,
+            data: {
+                // User info
+                id: rider._id,
+                name: rider.name,
+                email: rider.email,
+                phoneNumber: rider.phoneNumber,
+                location: rider.location,
+                // Application info
+                esewaId: application?.esewaId || "",
+                vehicleType: application?.vehicleType || "",
+                licenseNumber: application?.licenseNumber || "",
+                experience: application?.experience || "",
+                availability: application?.availability || "",
+                district: application?.district || "",
+                address: application?.address || "",
+                licenseUrl: application?.licenseUrl || "",
+                approvedAt: application?.updatedAt || null,
+            },
+        });
+    } catch (error: unknown) {
+        if (error instanceof Error) {
+            return res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({
+                success: false,
+                message: error.message,
+            });
+        }
+    }
+};
 export const requestPayout = async (req: Request, res: Response) => {
     try {
         const riderId = req.user?.id;

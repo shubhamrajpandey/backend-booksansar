@@ -15,7 +15,8 @@ import {
   getRiderStats,
   requestPayout,
   getRiderEarningsAdmin,
-  payRider,              // ← new
+  payRider,
+  getRiderProfile,
 } from "./rider.controller";
 import { authenticateToken } from "../../middlewares/auth.middleware";
 import { verifyRole } from "../../middlewares/role.middleware";
@@ -33,10 +34,11 @@ router.post("/location", authenticateToken, verifyRole("rider"), updateRiderLoca
 router.get("/history", authenticateToken, verifyRole("rider"), getRiderHistory);
 router.get("/stats", authenticateToken, verifyRole("rider"), getRiderStats);
 router.post("/payout-request", authenticateToken, verifyRole("rider"), requestPayout);
+router.get("/profile", authenticateToken, verifyRole("rider"), getRiderProfile);
 
 // ── Admin routes ─────────────────────────────────────────────
 router.get("/admin/earnings", authenticateToken, verifyRole("admin"), getRiderEarningsAdmin);
-router.post("/admin/pay", authenticateToken, verifyRole("admin"), payRider);  // ← new
+router.post("/admin/pay", authenticateToken, verifyRole("admin"), payRider);
 
 router.get("/applications", authenticateToken, verifyRole("admin"), getAllApplications);
 router.get("/applications/:id", authenticateToken, verifyRole("admin"), getApplicationById);
