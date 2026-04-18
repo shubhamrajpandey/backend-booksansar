@@ -9,6 +9,7 @@ export interface IUser extends Document {
   location?: string;
   bio?: string;
   avatar?: string;
+  googleId?: string;
   accountStatus: "active" | "suspended";
   isFirstLogin: boolean;
   isVerified: boolean;
@@ -22,7 +23,7 @@ const userSchema: Schema<IUser> = new Schema(
 
     email: { type: String, required: true, unique: true },
 
-    password: { type: String, required: true },
+    password: { type: String, required: false, default: "" },
 
     role: {
       type: String,
@@ -51,6 +52,11 @@ const userSchema: Schema<IUser> = new Schema(
     },
 
     avatar: {
+      type: String,
+      default: "",
+    },
+
+    googleId: {
       type: String,
       default: "",
     },

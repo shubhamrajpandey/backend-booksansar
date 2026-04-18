@@ -1,3 +1,4 @@
+import { OAuth2Client } from "google-auth-library";
 import { Request, Response } from "express";
 import User from "../user/user.model";
 import { StatusCodes } from "http-status-codes";
@@ -6,6 +7,107 @@ import jwt from "jsonwebtoken";
 import Vendor from "../vendor/vendor.model";
 import OTP from "../otp/otp.model";
 import sendEmail from "../../services/mail.service";
+
+const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
+
+//Google Login
+export const googleLogin = async (req: Request, res: Response) => {
+  try {
+    const { accessToken } = req.body;
+
+    if (!accessToken) {
+      return res.status(StatusCodes.BAD_REQUEST).json({
+        success: false,
+        message: "Google access token is required.",
+      });
+    }
+
+    // Fetch user info from Google using the access token
+    const userInfoRes = await fetch("https://www.googleapis.com/oauth2/v3/userinfo", {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+
+    if (!userInfoRes.ok) {
+      return res.status(StatusCodes.UNAUTHORIZED).json({
+        success: false,
+        message: "Invalid Google token.",
+      });
+    }
+
+    const payload = await userInfoRes.json();
+    const { email, name, sub: googleId } = payload;
+
+    let user = await User.findOne({ email });
+
+    if (user) {
+
+      if (!user.googleId) {
+        user.googleId = googleId;
+        await user.save();
+      }
+
+      if (user.accountStatus === "suspended") {
+        return res.status(StatusCodes.FORBIDDEN).json({
+          success: false,
+          message: "Your account has been suspended.",
+        });
+      }
+
+      if (user.role === "vendor") {
+        const vendorProfile = await Vendor.findOne({ userId: user._id });
+        if (!vendorProfile || vendorProfile.status !== "approved") {
+          return res.status(StatusCodes.FORBIDDEN).json({
+            success: false,
+            message: "Vendor profile not approved yet.",
+          });
+        }
+      }
+    } else {
+
+      user = await User.create({
+        name: name || email.split("@")[0],
+        email,
+        password: "",
+        googleId,
+        role: "learner",
+        isVerified: true,
+        accountStatus: "active",
+      });
+    }
+
+    const token = jwt.sign(
+      { id: user._id, role: user.role },
+      process.env.JWT_SECRET as string,
+      { expiresIn: "7d" }
+    );
+
+    const safeUser = {
+      id: user._id,
+      name: user.name,
+      email: user.email,
+      role: user.role,
+      isFirstLogin: user.isFirstLogin,
+    };
+
+    return res.status(StatusCodes.OK).json({
+      success: true,
+      message: "Successfully logged in with Google.",
+      token,
+      user: safeUser,
+    });
+  } catch (error: unknown) {
+    if (error instanceof Error) {
+      return res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({
+        success: false,
+        message: error.message,
+      });
+    }
+    return res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({
+      success: false,
+      message: "An unexpected error occurred",
+    });
+  }
+};
 
 // Register
 export const userRegister = async (req: Request, res: Response) => {
