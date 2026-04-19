@@ -4,7 +4,8 @@ export type SupportType =
   | "feedback"
   | "book_request"
   | "contact"
-  | "return_request";
+  | "return_request"
+  | "bulk_order";
 export type SupportStatus = "pending" | "in_review" | "resolved" | "rejected";
 
 export interface ISupport extends Document {
@@ -21,6 +22,8 @@ export interface ISupport extends Document {
   returnReason?: string;
   bookTitle?: string;
   bookAuthor?: string;
+  organization?: string;
+  organizationType?: string;
   adminNote?: string;
   resolvedAt?: Date;
   createdAt: Date;
@@ -31,7 +34,7 @@ const supportSchema = new Schema<ISupport>(
   {
     type: {
       type: String,
-      enum: ["feedback", "book_request", "contact", "return_request"],
+      enum: ["feedback", "book_request", "contact", "return_request", "bulk_order"],
       required: true,
     },
     status: {
@@ -50,6 +53,8 @@ const supportSchema = new Schema<ISupport>(
     returnReason: String,
     bookTitle: String,
     bookAuthor: String,
+    organization: String,
+    organizationType: String,
     adminNote: String,
     resolvedAt: Date,
   },
