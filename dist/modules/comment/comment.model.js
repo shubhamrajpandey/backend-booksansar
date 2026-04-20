@@ -33,32 +33,13 @@ var __importStar = (this && this.__importStar) || (function () {
     };
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
+exports.Comment = void 0;
 const mongoose_1 = __importStar(require("mongoose"));
-const supportSchema = new mongoose_1.Schema({
-    type: {
-        type: String,
-        enum: ["feedback", "book_request", "contact", "return_request", "bulk_order"],
-        required: true,
-    },
-    status: {
-        type: String,
-        enum: ["pending", "in_review", "resolved", "rejected"],
-        default: "pending",
-    },
-    name: String,
-    email: { type: String, required: true },
-    phone: String,
-    subject: String,
-    message: { type: String, required: true },
-    rating: { type: Number, min: 1, max: 5 },
-    files: [String],
-    orderNumber: String,
-    returnReason: String,
-    bookTitle: String,
-    bookAuthor: String,
-    organization: String,
-    organizationType: String,
-    adminNote: String,
-    resolvedAt: Date,
+const CommentSchema = new mongoose_1.Schema({
+    bookId: { type: mongoose_1.Schema.Types.ObjectId, ref: "Book", required: true },
+    userId: { type: mongoose_1.Schema.Types.ObjectId, ref: "User", required: true },
+    content: { type: String, required: true, maxlength: 500 },
+    page: { type: Number, default: null },
 }, { timestamps: true });
-exports.default = mongoose_1.default.model("Support", supportSchema);
+CommentSchema.index({ bookId: 1, createdAt: -1 });
+exports.Comment = mongoose_1.default.model("Comment", CommentSchema);

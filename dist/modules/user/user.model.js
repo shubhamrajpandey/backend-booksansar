@@ -37,10 +37,10 @@ const mongoose_1 = __importStar(require("mongoose"));
 const userSchema = new mongoose_1.Schema({
     name: { type: String, required: true },
     email: { type: String, required: true, unique: true },
-    password: { type: String, required: true },
+    password: { type: String, required: false, default: "" },
     role: {
         type: String,
-        enum: ["learner", "vendor", "admin"],
+        enum: ["learner", "vendor", "admin", "rider"],
         default: "learner",
     },
     phoneNumber: {
@@ -48,7 +48,7 @@ const userSchema = new mongoose_1.Schema({
         unique: true,
         sparse: true,
         required: function () {
-            return this.role === "vendor";
+            return this.role === "vendor" || this.role === "rider";
         },
     },
     location: {
@@ -64,10 +64,22 @@ const userSchema = new mongoose_1.Schema({
         type: String,
         default: "",
     },
+    googleId: {
+        type: String,
+        default: "",
+    },
     accountStatus: {
         type: String,
         enum: ["active", "suspended"],
         default: "active",
+    },
+    isFirstLogin: {
+        type: Boolean,
+        default: false,
+    },
+    isVerified: {
+        type: Boolean,
+        default: false,
     },
 }, { timestamps: true });
 const User = mongoose_1.default.model("User", userSchema);

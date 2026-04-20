@@ -15,6 +15,10 @@ router.get("/profile", auth_middleware_1.authenticateToken, (0, role_middleware_
 router.put("/profile", auth_middleware_1.authenticateToken, (0, role_middleware_1.verifyRole)("admin"), admin_controller_1.updateAdminProfile);
 router.put("/password", auth_middleware_1.authenticateToken, (0, role_middleware_1.verifyRole)("admin"), admin_controller_1.updateAdminPassword);
 router.get("/platform/stats", auth_middleware_1.authenticateToken, (0, role_middleware_1.verifyRole)("admin"), admin_controller_1.getPlatformStats);
+router.get("/dashboard/stats", auth_middleware_1.authenticateToken, (0, role_middleware_1.verifyRole)("admin"), admin_controller_1.getAdminDashboardStats);
+router.get("/dashboard/revenue-chart", auth_middleware_1.authenticateToken, (0, role_middleware_1.verifyRole)("admin"), admin_controller_1.getAdminRevenueChart);
+router.get("/dashboard/kyc-status", auth_middleware_1.authenticateToken, (0, role_middleware_1.verifyRole)("admin"), admin_controller_1.getAdminKYCStatus);
+router.get("/dashboard/order-status", auth_middleware_1.authenticateToken, (0, role_middleware_1.verifyRole)("admin"), admin_controller_1.getAdminOrderStatus);
 router.get("/active", admin_controller_1.getActiveCategories);
 router.get("/categories", admin_controller_1.getAllCategories);
 router.get("/categories/:id", admin_controller_1.getCategoryById);
@@ -27,4 +31,10 @@ router.put("/genres/:id", auth_middleware_1.authenticateToken, (0, role_middlewa
 router.delete("/genres/:id", auth_middleware_1.authenticateToken, (0, role_middleware_1.verifyRole)("admin"), admin_controller_1.deleteGenre);
 router.patch("/books/:id/moderate", auth_middleware_1.authenticateToken, (0, role_middleware_1.verifyRole)("admin"), admin_controller_1.moderateFreeBook);
 router.get("/books/pending", auth_middleware_1.authenticateToken, (0, role_middleware_1.verifyRole)("admin"), admin_controller_2.getPendingFreeBooks);
+router.get("/reports/sales-trend", auth_middleware_1.authenticateToken, (0, role_middleware_1.verifyRole)("admin"), admin_controller_1.getAdminSalesTrend);
+router.get("/reports/top-vendors", auth_middleware_1.authenticateToken, (0, role_middleware_1.verifyRole)("admin"), admin_controller_1.getAdminTopVendors);
+router.get("/reports/top-books", auth_middleware_1.authenticateToken, (0, role_middleware_1.verifyRole)("admin"), admin_controller_1.getAdminTopBooks);
+router.get("/reports/platform-summary", auth_middleware_1.authenticateToken, (0, role_middleware_1.verifyRole)("admin"), admin_controller_1.getAdminPlatformSummary);
+router.get("/reports/category-performance", auth_middleware_1.authenticateToken, (0, role_middleware_1.verifyRole)("admin"), admin_controller_1.getAdminCategoryPerformance);
+router.get("/reports/user-growth", auth_middleware_1.authenticateToken, (0, role_middleware_1.verifyRole)("admin"), admin_controller_1.getAdminUserGrowth);
 exports.default = router;

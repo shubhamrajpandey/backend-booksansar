@@ -199,9 +199,9 @@ const getVendorBilling = async (req, res) => {
             success: true,
             data: {
                 esewaId: vendor.esewaId,
-                commissionRate: 10,
-                processingFee: 2,
-                totalDeduction: 12,
+                commissionRate: 3,
+                processingFee: 0,
+                totalDeduction: 3,
                 recentPayouts: payouts,
             },
         });

@@ -34,31 +34,41 @@ var __importStar = (this && this.__importStar) || (function () {
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
 const mongoose_1 = __importStar(require("mongoose"));
-const supportSchema = new mongoose_1.Schema({
-    type: {
+const RiderApplicationSchema = new mongoose_1.Schema({
+    fullName: { type: String, required: true, trim: true },
+    email: { type: String, required: true, lowercase: true, trim: true },
+    phone: { type: String, required: true },
+    age: { type: Number, required: true, min: 18, max: 60 },
+    address: { type: String, required: true },
+    district: { type: String, required: true },
+    esewaId: { type: String, required: true },
+    vehicleType: {
         type: String,
-        enum: ["feedback", "book_request", "contact", "return_request", "bulk_order"],
+        enum: ["motorcycle", "scooter", "bicycle", "electric_bike"],
         required: true,
     },
+    licenseNumber: { type: String, required: true },
+    experience: {
+        type: String,
+        enum: ["none", "less_1", "1_2", "2_plus"],
+        required: true,
+    },
+    availability: {
+        type: String,
+        enum: ["Full Time", "Part Time", "Weekdays Only", "Weekends Only"],
+        required: true,
+    },
+    message: { type: String, default: "" },
+    licenseUrl: { type: String, required: true },
     status: {
         type: String,
-        enum: ["pending", "in_review", "resolved", "rejected"],
+        enum: ["pending", "approved", "rejected"],
         default: "pending",
     },
-    name: String,
-    email: { type: String, required: true },
-    phone: String,
-    subject: String,
-    message: { type: String, required: true },
-    rating: { type: Number, min: 1, max: 5 },
-    files: [String],
-    orderNumber: String,
-    returnReason: String,
-    bookTitle: String,
-    bookAuthor: String,
-    organization: String,
-    organizationType: String,
-    adminNote: String,
-    resolvedAt: Date,
+    rejectionReason: { type: String, default: "" },
+    riderId: { type: mongoose_1.Schema.Types.ObjectId, ref: "User", default: null },
 }, { timestamps: true });
-exports.default = mongoose_1.default.model("Support", supportSchema);
+RiderApplicationSchema.index({ email: 1 });
+RiderApplicationSchema.index({ status: 1, createdAt: -1 });
+const RiderApplication = mongoose_1.default.model("RiderApplication", RiderApplicationSchema);
+exports.default = RiderApplication;

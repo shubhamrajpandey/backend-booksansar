@@ -99,6 +99,18 @@ const getConfirmationEmail = (type, name) => {
         </div>
       `,
         },
+        bulk_order: {
+            subject: "Bulk Order Enquiry Received – BookSansar",
+            heading: "Bulk Order Enquiry",
+            body: `
+        <p style="font-size:15px; line-height:1.6; color:#4b5563;">
+          Dear <strong>${displayName}</strong>,
+        </p>
+        <p style="font-size:15px; line-height:1.6; color:#4b5563;">
+          Thank you for your interest in BookSansar's bulk order programme! We have received your enquiry and our B2B team will reach out to you within <strong>1 business day</strong> to discuss your requirements.
+        </p>
+      `,
+        },
     };
     const config = typeConfig[type];
     return {
@@ -159,7 +171,7 @@ const getAdminResolutionEmail = (name, id, status, adminNote) => {
 const createSupportRequest = async (req, res) => {
     try {
         const { type, email, name, files } = req.body;
-        const allowed = ["feedback", "book_request", "contact", "return_request"];
+        const allowed = ["feedback", "book_request", "contact", "return_request", "bulk_order"];
         if (!allowed.includes(type)) {
             return res.status(400).json({ message: "Invalid support type" });
         }

@@ -13,13 +13,11 @@ const requestPayout = async (req, res) => {
         const { note } = req.body;
         const vendor = await vendor_model_1.default.findOne({ userId });
         if (!vendor) {
-            return res
-                .status(404)
-                .json({ success: false, message: "Vendor profile not found" });
+            return res.status(404).json({ success: false, message: "Vendor profile not found" });
         }
         const existing = await payout_model_1.Payout.findOne({
             vendorId: vendor._id,
-            status: "pending",
+            status: { $in: ["pending", "processing"] },
         });
         if (existing) {
             return res.status(400).json({
@@ -27,13 +25,14 @@ const requestPayout = async (req, res) => {
                 message: "You already have a pending payout request. Wait for it to be processed.",
             });
         }
+        // ── ONLY count DELIVERED orders ──────────────────────────
+        // Orders in progress (payment_received, confirmed, etc.)
+        // are still in escrow — vendor cannot withdraw them yet
         const earningsResult = await order_model_1.Order.aggregate([
             {
                 $match: {
                     "items.vendorId": vendor._id,
-                    status: {
-                        $in: ["payment_received", "confirmed", "shipped", "delivered"],
-                    },
+                    status: "delivered", // ← only delivered
                 },
             },
             {
@@ -47,11 +46,18 @@ const requestPayout = async (req, res) => {
         ]);
         const grossAmount = earningsResult[0]?.totalGross ?? 0;
         const commissionAmount = earningsResult[0]?.totalCommission ?? 0;
-        const netAmount = earningsResult[0]?.totalVendor ?? 0;
-        if (netAmount <= 0) {
+        const totalEarned = earningsResult[0]?.totalVendor ?? 0;
+        // ── Subtract already paid out amounts ────────────────────
+        const alreadyPaidResult = await payout_model_1.Payout.aggregate([
+            { $match: { vendorId: vendor._id, status: "paid" } },
+            { $group: { _id: null, totalPaidOut: { $sum: "$netAmount" } } },
+        ]);
+        const totalPaidOut = alreadyPaidResult[0]?.totalPaidOut ?? 0;
+        const availableBalance = Math.max(0, totalEarned - totalPaidOut);
+        if (availableBalance <= 0) {
             return res.status(400).json({
                 success: false,
-                message: "No earnings available to request payout.",
+                message: "No available balance. Earnings are released only after orders are delivered.",
             });
         }
         const payoutId = `PAY-${Date.now()}`;
@@ -60,7 +66,7 @@ const requestPayout = async (req, res) => {
             vendorId: vendor._id,
             requestedAmount: grossAmount,
             commissionDeducted: commissionAmount,
-            netAmount,
+            netAmount: availableBalance,
             esewaId: vendor.esewaId,
             status: "pending",
             note,
@@ -72,9 +78,7 @@ const requestPayout = async (req, res) => {
         });
     }
     catch (err) {
-        return res
-            .status(500)
-            .json({ success: false, message: "Failed to request payout" });
+        return res.status(500).json({ success: false, message: "Failed to request payout" });
     }
 };
 exports.requestPayout = requestPayout;
@@ -83,19 +87,13 @@ const getMyPayouts = async (req, res) => {
         const userId = req.user?.id;
         const vendor = await vendor_model_1.default.findOne({ userId });
         if (!vendor) {
-            return res
-                .status(404)
-                .json({ success: false, message: "Vendor profile not found" });
+            return res.status(404).json({ success: false, message: "Vendor profile not found" });
         }
-        const payouts = await payout_model_1.Payout.find({ vendorId: vendor._id }).sort({
-            createdAt: -1,
-        });
+        const payouts = await payout_model_1.Payout.find({ vendorId: vendor._id }).sort({ createdAt: -1 });
         return res.json({ success: true, data: payouts });
     }
     catch (err) {
-        return res
-            .status(500)
-            .json({ success: false, message: "Failed to fetch payouts" });
+        return res.status(500).json({ success: false, message: "Failed to fetch payouts" });
     }
 };
 exports.getMyPayouts = getMyPayouts;
@@ -130,9 +128,7 @@ const getAllPayouts = async (req, res) => {
         });
     }
     catch (err) {
-        return res
-            .status(500)
-            .json({ success: false, message: "Failed to fetch payouts" });
+        return res.status(500).json({ success: false, message: "Failed to fetch payouts" });
     }
 };
 exports.getAllPayouts = getAllPayouts;
@@ -142,20 +138,14 @@ const updatePayoutStatus = async (req, res) => {
         const { status, adminNote } = req.body;
         const allowed = ["processing", "paid", "rejected"];
         if (!allowed.includes(status)) {
-            return res
-                .status(400)
-                .json({ success: false, message: "Invalid status" });
+            return res.status(400).json({ success: false, message: "Invalid status" });
         }
         const payout = await payout_model_1.Payout.findOne({ payoutId });
         if (!payout) {
-            return res
-                .status(404)
-                .json({ success: false, message: "Payout not found" });
+            return res.status(404).json({ success: false, message: "Payout not found" });
         }
         if (payout.status === "paid") {
-            return res
-                .status(400)
-                .json({ success: false, message: "Payout already completed" });
+            return res.status(400).json({ success: false, message: "Payout already completed" });
         }
         payout.status = status;
         if (adminNote)
@@ -163,16 +153,10 @@ const updatePayoutStatus = async (req, res) => {
         if (status === "paid")
             payout.processedAt = new Date();
         await payout.save();
-        return res.json({
-            success: true,
-            message: `Payout marked as ${status}`,
-            data: payout,
-        });
+        return res.json({ success: true, message: `Payout marked as ${status}`, data: payout });
     }
     catch (err) {
-        return res
-            .status(500)
-            .json({ success: false, message: "Failed to update payout" });
+        return res.status(500).json({ success: false, message: "Failed to update payout" });
     }
 };
 exports.updatePayoutStatus = updatePayoutStatus;
@@ -185,14 +169,8 @@ const getPayoutStats = async (_req, res) => {
                     $group: {
                         _id: null,
                         totalRequested: { $sum: "$netAmount" },
-                        totalPaid: {
-                            $sum: { $cond: [{ $eq: ["$status", "paid"] }, "$netAmount", 0] },
-                        },
-                        totalPending: {
-                            $sum: {
-                                $cond: [{ $eq: ["$status", "pending"] }, "$netAmount", 0],
-                            },
-                        },
+                        totalPaid: { $sum: { $cond: [{ $eq: ["$status", "paid"] }, "$netAmount", 0] } },
+                        totalPending: { $sum: { $cond: [{ $eq: ["$status", "pending"] }, "$netAmount", 0] } },
                     },
                 },
             ]),
@@ -212,9 +190,7 @@ const getPayoutStats = async (_req, res) => {
         });
     }
     catch (err) {
-        return res
-            .status(500)
-            .json({ success: false, message: "Failed to fetch payout stats" });
+        return res.status(500).json({ success: false, message: "Failed to fetch payout stats" });
     }
 };
 exports.getPayoutStats = getPayoutStats;

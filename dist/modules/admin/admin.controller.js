@@ -3,7 +3,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.getPlatformStats = exports.updateAdminPassword = exports.updateAdminProfile = exports.getAdminProfile = exports.getPendingFreeBooks = exports.moderateFreeBook = exports.getActiveCategories = exports.updateGenre = exports.deleteGenre = exports.addGenre = exports.getGenres = exports.deleteCategory = exports.updateCategory = exports.addCategory = exports.getCategoryById = exports.getAllCategories = exports.updateUserAccountStatus = exports.getVendorDetails = exports.updateVendorStatus = exports.deleteUser = exports.getAllUsers = void 0;
+exports.getAdminUserGrowth = exports.getAdminCategoryPerformance = exports.getAdminPlatformSummary = exports.getAdminTopBooks = exports.getAdminTopVendors = exports.getAdminSalesTrend = exports.getAdminOrderStatus = exports.getAdminKYCStatus = exports.getAdminRevenueChart = exports.getAdminDashboardStats = exports.getPlatformStats = exports.updateAdminPassword = exports.updateAdminProfile = exports.getAdminProfile = exports.getPendingFreeBooks = exports.moderateFreeBook = exports.getActiveCategories = exports.updateGenre = exports.deleteGenre = exports.addGenre = exports.getGenres = exports.deleteCategory = exports.updateCategory = exports.addCategory = exports.getCategoryById = exports.getAllCategories = exports.updateUserAccountStatus = exports.getVendorDetails = exports.updateVendorStatus = exports.deleteUser = exports.getAllUsers = void 0;
 const http_status_codes_1 = require("http-status-codes");
 const user_model_1 = __importDefault(require("../user/user.model"));
 const vendor_model_1 = __importDefault(require("../vendor/vendor.model"));
@@ -13,6 +13,7 @@ const book_model_1 = __importDefault(require("../book/book.model"));
 const mongoose_1 = __importDefault(require("mongoose"));
 const platform_utils_1 = require("../../utils/platform.utils");
 const genre_model_1 = __importDefault(require("../taxonomy/genre.model"));
+const order_model_1 = require("../order/order.model");
 // Users
 const getAllUsers = async (req, res) => {
     try {
@@ -76,6 +77,7 @@ const getAllUsers = async (req, res) => {
     }
 };
 exports.getAllUsers = getAllUsers;
+//Delete User
 const deleteUser = async (req, res) => {
     try {
         const user = await user_model_1.default.findByIdAndDelete(req.params.id);
@@ -98,6 +100,7 @@ const deleteUser = async (req, res) => {
     }
 };
 exports.deleteUser = deleteUser;
+//Update Vendor Status
 const updateVendorStatus = async (req, res) => {
     try {
         const { id } = req.params;
@@ -341,6 +344,7 @@ const getAllCategories = async (req, res) => {
     }
 };
 exports.getAllCategories = getAllCategories;
+//Get Category By Id
 const getCategoryById = async (req, res) => {
     try {
         const { id } = req.params;
@@ -376,6 +380,7 @@ const getCategoryById = async (req, res) => {
     }
 };
 exports.getCategoryById = getCategoryById;
+//Add Category
 const addCategory = async (req, res) => {
     try {
         const { name, description } = req.body;
@@ -426,6 +431,7 @@ const addCategory = async (req, res) => {
     }
 };
 exports.addCategory = addCategory;
+//Update Category
 const updateCategory = async (req, res) => {
     try {
         const { id } = req.params;
@@ -484,6 +490,7 @@ const updateCategory = async (req, res) => {
     }
 };
 exports.updateCategory = updateCategory;
+//Delete Category
 const deleteCategory = async (req, res) => {
     try {
         const { id } = req.params;
@@ -570,6 +577,7 @@ const getGenres = async (req, res) => {
     }
 };
 exports.getGenres = getGenres;
+//Add Genre
 const addGenre = async (req, res) => {
     try {
         const { name } = req.body;
@@ -609,6 +617,7 @@ const addGenre = async (req, res) => {
     }
 };
 exports.addGenre = addGenre;
+//Delete Genre
 const deleteGenre = async (req, res) => {
     try {
         const { id } = req.params;
@@ -641,6 +650,7 @@ const deleteGenre = async (req, res) => {
     }
 };
 exports.deleteGenre = deleteGenre;
+//Update Genre
 const updateGenre = async (req, res) => {
     try {
         const { id } = req.params;
@@ -701,7 +711,7 @@ const updateGenre = async (req, res) => {
     }
 };
 exports.updateGenre = updateGenre;
-//get active categories for book addition
+//Get Active Categories
 const getActiveCategories = async (req, res) => {
     try {
         const categories = await category_model_1.default.find({ isActive: true }).sort({
@@ -782,25 +792,6 @@ const getPendingFreeBooks = async (req, res) => {
     }
 };
 exports.getPendingFreeBooks = getPendingFreeBooks;
-// //get pending second-hand books for admin approval
-// export const getPendingSecondHandBooks = async (req: Request, res: Response) => {
-//   try {
-//     const pendingBooks = await Book.find({
-//       type: "second-hand",
-//       visibility: "pending",
-//     });
-//     return res.status(StatusCodes.OK).json({
-//       success: true,
-//       message: "Pending second-hand books fetched successfully",
-//       data: pendingBooks,
-//     });
-//   } catch (error) {
-//     return res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({
-//       success: false,
-//       message: "Server error",
-//     });
-//   }
-// }
 // Admin Profile
 const getAdminProfile = async (req, res) => {
     try {
@@ -945,7 +936,16 @@ const getPlatformStats = async (req, res) => {
         const dbStatus = mongoose_1.default.connection.readyState === 1 ? "Connected" : "Disconnected";
         const platformVersion = process.env.PLATFORM_VERSION || "1.0.0";
         const uptimeSeconds = process.uptime();
-        const uptimePercentage = "99.8%";
+        const days = Math.floor(uptimeSeconds / 86400);
+        const hours = Math.floor((uptimeSeconds % 86400) / 3600);
+        const minutes = Math.floor((uptimeSeconds % 3600) / 60);
+        const seconds = Math.floor(uptimeSeconds % 60);
+        let formattedUptime = "";
+        if (days > 0)
+            formattedUptime += `${days}d `;
+        if (hours > 0 || days > 0)
+            formattedUptime += `${hours}h `;
+        formattedUptime += `${minutes}m ${seconds}s`;
         const lastBackup = await (0, platform_utils_1.getLastBackupTime)();
         return res.status(http_status_codes_1.StatusCodes.OK).json({
             success: true,
@@ -954,7 +954,7 @@ const getPlatformStats = async (req, res) => {
                 platformVersion,
                 databaseStatus: dbStatus,
                 lastBackup,
-                uptime: uptimePercentage,
+                uptime: formattedUptime.trim(),
                 uptimeSeconds,
             },
         });
@@ -968,3 +968,567 @@ const getPlatformStats = async (req, res) => {
     }
 };
 exports.getPlatformStats = getPlatformStats;
+// GET /admin/dashboard/stats
+const getAdminDashboardStats = async (req, res) => {
+    try {
+        const today = new Date();
+        const firstDayThisMonth = new Date(today.getFullYear(), today.getMonth(), 1);
+        const totalVendors = await vendor_model_1.default.countDocuments();
+        const activeVendors = await vendor_model_1.default.countDocuments({ status: "approved" });
+        const totalBooks = await book_model_1.default.countDocuments({
+            visibility: { $in: ["public", "pending"] },
+        });
+        const monthlyRevenueResult = await order_model_1.Order.aggregate([
+            {
+                $match: {
+                    status: "delivered",
+                    createdAt: { $gte: firstDayThisMonth },
+                },
+            },
+            {
+                $unwind: "$items",
+            },
+            {
+                $group: {
+                    _id: null,
+                    total: { $sum: "$items.price" },
+                },
+            },
+        ]);
+        const monthlyRevenue = (monthlyRevenueResult[0]?.total || 0) * 0.12;
+        const pendingKYC = await vendor_model_1.default.countDocuments({ status: "pending" });
+        const startOfDay = new Date(today.setHours(0, 0, 0, 0));
+        const endOfDay = new Date(today.setHours(23, 59, 59, 999));
+        const activeOrders = await order_model_1.Order.countDocuments({
+            status: { $in: ["pending", "confirmed", "processing"] },
+            createdAt: {
+                $gte: startOfDay,
+                $lte: endOfDay,
+            },
+        });
+        return res.status(http_status_codes_1.StatusCodes.OK).json({
+            success: true,
+            data: {
+                totalVendors,
+                activeVendors,
+                totalBooks,
+                monthlyRevenue: Math.round(monthlyRevenue),
+                pendingKYC,
+                activeOrders,
+            },
+        });
+    }
+    catch (error) {
+        console.error("Get admin dashboard stats error:", error);
+        return res.status(http_status_codes_1.StatusCodes.INTERNAL_SERVER_ERROR).json({
+            success: false,
+            message: "Server error",
+        });
+    }
+};
+exports.getAdminDashboardStats = getAdminDashboardStats;
+// GET /admin/dashboard/revenue-chart
+const getAdminRevenueChart = async (req, res) => {
+    try {
+        const sixMonthsAgo = new Date();
+        sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
+        const revenueData = await order_model_1.Order.aggregate([
+            {
+                $match: {
+                    status: "delivered",
+                    createdAt: { $gte: sixMonthsAgo },
+                },
+            },
+            {
+                $unwind: "$items",
+            },
+            {
+                $group: {
+                    _id: {
+                        $dateToString: { format: "%Y-%m", date: "$createdAt" },
+                    },
+                    revenue: { $sum: "$items.price" },
+                },
+            },
+            {
+                $sort: { _id: 1 },
+            },
+            {
+                $project: {
+                    month: {
+                        $dateToString: {
+                            format: "%b",
+                            date: {
+                                $dateFromString: { dateString: { $concat: ["$_id", "-01"] } },
+                            },
+                        },
+                    },
+                    revenue: { $multiply: ["$revenue", 0.12] },
+                },
+            },
+        ]);
+        return res.status(http_status_codes_1.StatusCodes.OK).json({
+            success: true,
+            data: revenueData.map((item) => ({
+                month: item.month,
+                revenue: Math.round(item.revenue),
+            })),
+        });
+    }
+    catch (error) {
+        console.error("Get admin revenue chart error:", error);
+        return res.status(http_status_codes_1.StatusCodes.INTERNAL_SERVER_ERROR).json({
+            success: false,
+            message: "Server error",
+        });
+    }
+};
+exports.getAdminRevenueChart = getAdminRevenueChart;
+// GET /admin/dashboard/kyc-status
+const getAdminKYCStatus = async (req, res) => {
+    try {
+        const kycStatus = await vendor_model_1.default.aggregate([
+            {
+                $group: {
+                    _id: "$status",
+                    count: { $sum: 1 },
+                },
+            },
+        ]);
+        const statusMap = {
+            approved: { value: 0, color: "#16a34a" },
+            pending: { value: 0, color: "#f59e0b" },
+            rejected: { value: 0, color: "#ef4444" },
+        };
+        kycStatus.forEach((item) => {
+            const status = item._id.toLowerCase();
+            if (status in statusMap) {
+                statusMap[status].value = item.count;
+            }
+        });
+        return res.status(http_status_codes_1.StatusCodes.OK).json({
+            success: true,
+            data: [
+                {
+                    name: "Approved",
+                    value: statusMap.approved.value,
+                    color: statusMap.approved.color,
+                },
+                {
+                    name: "Pending",
+                    value: statusMap.pending.value,
+                    color: statusMap.pending.color,
+                },
+                {
+                    name: "Rejected",
+                    value: statusMap.rejected.value,
+                    color: statusMap.rejected.color,
+                },
+            ],
+        });
+    }
+    catch (error) {
+        console.error("Get admin KYC status error:", error);
+        return res.status(http_status_codes_1.StatusCodes.INTERNAL_SERVER_ERROR).json({
+            success: false,
+            message: "Server error",
+        });
+    }
+};
+exports.getAdminKYCStatus = getAdminKYCStatus;
+// GET /admin/dashboard/order-status
+const getAdminOrderStatus = async (req, res) => {
+    try {
+        const orderStatus = await order_model_1.Order.aggregate([
+            {
+                $group: {
+                    _id: "$status",
+                    count: { $sum: 1 },
+                },
+            },
+        ]);
+        const statusMap = {
+            pending: 0,
+            confirmed: 0,
+            delivered: 0,
+            cancelled: 0,
+        };
+        orderStatus.forEach((item) => {
+            const status = item._id.toLowerCase();
+            if (status in statusMap) {
+                statusMap[status] = item.count;
+            }
+            else if (status === "processing") {
+                statusMap.confirmed += item.count;
+            }
+        });
+        return res.status(http_status_codes_1.StatusCodes.OK).json({
+            success: true,
+            data: [
+                { status: "Pending", orders: statusMap.pending },
+                { status: "Confirmed", orders: statusMap.confirmed },
+                { status: "Delivered", orders: statusMap.delivered },
+                { status: "Cancelled", orders: statusMap.cancelled },
+            ],
+        });
+    }
+    catch (error) {
+        console.error("Get admin order status error:", error);
+        return res.status(http_status_codes_1.StatusCodes.INTERNAL_SERVER_ERROR).json({
+            success: false,
+            message: "Server error",
+        });
+    }
+};
+exports.getAdminOrderStatus = getAdminOrderStatus;
+const getAdminSalesTrend = async (req, res) => {
+    try {
+        const sixMonthsAgo = new Date();
+        sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
+        const salesTrendData = await order_model_1.Order.aggregate([
+            {
+                $match: {
+                    status: "delivered",
+                    createdAt: { $gte: sixMonthsAgo },
+                },
+            },
+            {
+                $group: {
+                    _id: {
+                        $dateToString: { format: "%Y-%m", date: "$createdAt" },
+                    },
+                    sales: { $sum: "$totalAmount" },
+                    orders: { $sum: 1 },
+                },
+            },
+            {
+                $sort: { _id: 1 },
+            },
+            {
+                $project: {
+                    month: {
+                        $dateToString: {
+                            format: "%b",
+                            date: {
+                                $dateFromString: { dateString: { $concat: ["$_id", "-01"] } },
+                            },
+                        },
+                    },
+                    sales: 1,
+                    orders: 1,
+                },
+            },
+        ]);
+        return res.status(http_status_codes_1.StatusCodes.OK).json({
+            success: true,
+            data: salesTrendData.map((item) => ({
+                month: item.month,
+                sales: Math.round(item.sales),
+                orders: item.orders,
+            })),
+        });
+    }
+    catch (error) {
+        console.error("Get sales trend error:", error);
+        return res.status(http_status_codes_1.StatusCodes.INTERNAL_SERVER_ERROR).json({
+            success: false,
+            message: "Server error",
+        });
+    }
+};
+exports.getAdminSalesTrend = getAdminSalesTrend;
+// GET /admin/reports/top-vendors
+const getAdminTopVendors = async (req, res) => {
+    try {
+        const limit = Number(req.query.limit) || 5;
+        const topVendors = await order_model_1.Order.aggregate([
+            {
+                $match: {
+                    status: "delivered",
+                },
+            },
+            {
+                $unwind: "$items",
+            },
+            {
+                $group: {
+                    _id: "$items.vendorId",
+                    sales: { $sum: "$items.price" },
+                    orders: { $sum: 1 },
+                },
+            },
+            {
+                $sort: { sales: -1 },
+            },
+            {
+                $limit: limit,
+            },
+            {
+                $lookup: {
+                    from: "vendors",
+                    localField: "_id",
+                    foreignField: "_id",
+                    as: "vendorDetails",
+                },
+            },
+            {
+                $unwind: "$vendorDetails",
+            },
+            {
+                $project: {
+                    vendor: "$vendorDetails.storeName",
+                    sales: 1,
+                    orders: 1,
+                },
+            },
+        ]);
+        return res.status(http_status_codes_1.StatusCodes.OK).json({
+            success: true,
+            data: topVendors.map((item) => ({
+                vendor: item.vendor,
+                sales: Math.round(item.sales),
+                orders: item.orders,
+            })),
+        });
+    }
+    catch (error) {
+        console.error("Get top vendors error:", error);
+        return res.status(http_status_codes_1.StatusCodes.INTERNAL_SERVER_ERROR).json({
+            success: false,
+            message: "Server error",
+        });
+    }
+};
+exports.getAdminTopVendors = getAdminTopVendors;
+// GET /admin/reports/top-books
+const getAdminTopBooks = async (req, res) => {
+    try {
+        const limit = Number(req.query.limit) || 5;
+        const topBooks = await order_model_1.Order.aggregate([
+            {
+                $match: {
+                    status: "delivered",
+                },
+            },
+            {
+                $unwind: "$items",
+            },
+            {
+                $group: {
+                    _id: "$items.bookId",
+                    sales: { $sum: "$items.quantity" },
+                    revenue: { $sum: "$items.price" },
+                },
+            },
+            {
+                $sort: { sales: -1 },
+            },
+            {
+                $limit: limit,
+            },
+            {
+                $lookup: {
+                    from: "books",
+                    localField: "_id",
+                    foreignField: "_id",
+                    as: "bookDetails",
+                },
+            },
+            {
+                $unwind: "$bookDetails",
+            },
+            {
+                $project: {
+                    title: "$bookDetails.title",
+                    sales: 1,
+                    revenue: 1,
+                },
+            },
+        ]);
+        return res.status(http_status_codes_1.StatusCodes.OK).json({
+            success: true,
+            data: topBooks.map((item) => ({
+                title: item.title.substring(0, 30), // Truncate long titles
+                sales: item.sales,
+                revenue: Math.round(item.revenue),
+            })),
+        });
+    }
+    catch (error) {
+        console.error("Get top books error:", error);
+        return res.status(http_status_codes_1.StatusCodes.INTERNAL_SERVER_ERROR).json({
+            success: false,
+            message: "Server error",
+        });
+    }
+};
+exports.getAdminTopBooks = getAdminTopBooks;
+// GET /admin/reports/platform-summary
+const getAdminPlatformSummary = async (req, res) => {
+    try {
+        // Total Users
+        const totalUsers = await user_model_1.default.countDocuments();
+        // Total Orders
+        const totalOrders = await order_model_1.Order.countDocuments();
+        // Total Books
+        const totalBooks = await book_model_1.default.countDocuments({
+            visibility: { $in: ["public", "pending"] },
+        });
+        // Average Order Value
+        const avgOrderResult = await order_model_1.Order.aggregate([
+            {
+                $match: {
+                    status: "delivered",
+                },
+            },
+            {
+                $group: {
+                    _id: null,
+                    avgOrderValue: { $avg: "$totalAmount" },
+                },
+            },
+        ]);
+        const avgOrderValue = avgOrderResult[0]?.avgOrderValue || 0;
+        // Total Revenue
+        const totalRevenueResult = await order_model_1.Order.aggregate([
+            {
+                $match: {
+                    status: "delivered",
+                },
+            },
+            {
+                $group: {
+                    _id: null,
+                    totalRevenue: { $sum: "$totalAmount" },
+                },
+            },
+        ]);
+        const totalRevenue = totalRevenueResult[0]?.totalRevenue || 0;
+        // Platform Commission (12%)
+        const platformCommission = totalRevenue * 0.12;
+        return res.status(http_status_codes_1.StatusCodes.OK).json({
+            success: true,
+            data: {
+                totalUsers,
+                totalOrders,
+                totalBooks,
+                avgOrderValue: Math.round(avgOrderValue),
+                totalRevenue: Math.round(totalRevenue),
+                platformCommission: Math.round(platformCommission),
+            },
+        });
+    }
+    catch (error) {
+        console.error("Get platform summary error:", error);
+        return res.status(http_status_codes_1.StatusCodes.INTERNAL_SERVER_ERROR).json({
+            success: false,
+            message: "Server error",
+        });
+    }
+};
+exports.getAdminPlatformSummary = getAdminPlatformSummary;
+// GET /admin/reports/category-performance
+const getAdminCategoryPerformance = async (req, res) => {
+    try {
+        const categoryPerformance = await order_model_1.Order.aggregate([
+            {
+                $match: {
+                    status: "delivered",
+                },
+            },
+            {
+                $unwind: "$items",
+            },
+            {
+                $lookup: {
+                    from: "books",
+                    localField: "items.bookId",
+                    foreignField: "_id",
+                    as: "bookDetails",
+                },
+            },
+            {
+                $unwind: "$bookDetails",
+            },
+            {
+                $group: {
+                    _id: "$bookDetails.category",
+                    sales: { $sum: "$items.quantity" },
+                    revenue: { $sum: "$items.price" },
+                },
+            },
+            {
+                $sort: { revenue: -1 },
+            },
+            {
+                $limit: 10,
+            },
+        ]);
+        return res.status(http_status_codes_1.StatusCodes.OK).json({
+            success: true,
+            data: categoryPerformance.map((item) => ({
+                category: item._id,
+                sales: item.sales,
+                revenue: Math.round(item.revenue),
+            })),
+        });
+    }
+    catch (error) {
+        console.error("Get category performance error:", error);
+        return res.status(http_status_codes_1.StatusCodes.INTERNAL_SERVER_ERROR).json({
+            success: false,
+            message: "Server error",
+        });
+    }
+};
+exports.getAdminCategoryPerformance = getAdminCategoryPerformance;
+// GET /admin/reports/user-growth
+const getAdminUserGrowth = async (req, res) => {
+    try {
+        const sixMonthsAgo = new Date();
+        sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
+        const userGrowth = await user_model_1.default.aggregate([
+            {
+                $match: {
+                    createdAt: { $gte: sixMonthsAgo },
+                },
+            },
+            {
+                $group: {
+                    _id: {
+                        $dateToString: { format: "%Y-%m", date: "$createdAt" },
+                    },
+                    newUsers: { $sum: 1 },
+                },
+            },
+            {
+                $sort: { _id: 1 },
+            },
+            {
+                $project: {
+                    month: {
+                        $dateToString: {
+                            format: "%b",
+                            date: {
+                                $dateFromString: { dateString: { $concat: ["$_id", "-01"] } },
+                            },
+                        },
+                    },
+                    newUsers: 1,
+                },
+            },
+        ]);
+        return res.status(http_status_codes_1.StatusCodes.OK).json({
+            success: true,
+            data: userGrowth,
+        });
+    }
+    catch (error) {
+        console.error("Get user growth error:", error);
+        return res.status(http_status_codes_1.StatusCodes.INTERNAL_SERVER_ERROR).json({
+            success: false,
+            message: "Server error",
+        });
+    }
+};
+exports.getAdminUserGrowth = getAdminUserGrowth;

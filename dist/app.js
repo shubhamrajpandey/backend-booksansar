@@ -61,10 +61,14 @@ const vendor_routes_1 = __importDefault(require("./modules/vendor/vendor.routes"
 const vendor_inventory_routes_1 = __importDefault(require("./modules/vendor/vendor.inventory.routes"));
 const readingstats_routes_2 = __importDefault(require("./modules/readingstats/readingstats.routes"));
 const notification_routes_1 = __importDefault(require("./modules/notification/notification.routes"));
+const vendor_dashboard_routes_1 = __importDefault(require("./modules/vendor/vendor.dashboard.routes"));
+const ai_routes_1 = __importDefault(require("./modules/ai/ai.routes"));
+const rider_application_routes_1 = __importDefault(require("./modules/rider/rider.application.routes"));
+const comment_routes_1 = __importDefault(require("./modules/comment/comment.routes"));
 const app = (0, express_1.default)();
 const v1Router = (0, express_1.Router)();
 app.use((0, cors_1.default)({
-    origin: "http://localhost:3000",
+    origin: ["http://localhost:3000", "http://192.168.1.103:5000"],
     credentials: true,
     methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
     allowedHeaders: ["Content-Type", "Authorization"],
@@ -93,5 +97,9 @@ v1Router.use("/vendor", vendor_routes_1.default);
 v1Router.use("/vendor/inventory", vendor_inventory_routes_1.default);
 v1Router.use("/reading-stats", readingstats_routes_2.default);
 v1Router.use("/notifications", notification_routes_1.default);
+v1Router.use("/vendor/dashboard", vendor_dashboard_routes_1.default);
+v1Router.use("/ai", ai_routes_1.default);
+v1Router.use("/rider", rider_application_routes_1.default);
+v1Router.use("/comments", comment_routes_1.default);
 app.use("/api/v1", v1Router);
 exports.default = app;

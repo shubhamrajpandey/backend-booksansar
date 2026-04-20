@@ -17,16 +17,12 @@ const getProfile = async (req, res) => {
         const user = await user_model_1.default.findById(userId).select("-password");
         if (!user)
             return res.status(404).json({ message: "User not found" });
-        let stats = await readingstats_model_1.default.findOne({ userId });
-        if (!stats)
-            stats = await readingstats_model_1.default.create({ userId });
-        // ── AUTO-DECAY: reset streak if user hasn't read today or yesterday ──
+        let stats = await readingstats_model_1.default.findOneAndUpdate({ userId }, { $setOnInsert: { userId } }, { new: true, upsert: true, setDefaultsOnInsert: true });
         if (stats.lastReadDate && stats.currentStreak > 0) {
             const today = Date.UTC(new Date().getUTCFullYear(), new Date().getUTCMonth(), new Date().getUTCDate());
             const lastRead = Date.UTC(new Date(stats.lastReadDate).getUTCFullYear(), new Date(stats.lastReadDate).getUTCMonth(), new Date(stats.lastReadDate).getUTCDate());
             const daysSince = (today - lastRead) / 86400000;
             if (daysSince > 1) {
-                // Check streak freeze
                 if (daysSince === 2 &&
                     stats.streakFreezeCount > 0 &&
                     !stats.streakFreezeUsed) {
@@ -113,10 +109,7 @@ exports.updateProfile = updateProfile;
 const getReadingStats = async (req, res) => {
     try {
         const userId = req.user?.id;
-        let stats = await readingstats_model_1.default.findOne({ userId });
-        if (!stats) {
-            stats = await readingstats_model_1.default.create({ userId });
-        }
+        let stats = await readingstats_model_1.default.findOneAndUpdate({ userId }, { $setOnInsert: { userId } }, { new: true, upsert: true, setDefaultsOnInsert: true });
         res.status(200).json({ stats });
     }
     catch (error) {
@@ -129,10 +122,7 @@ exports.getReadingStats = getReadingStats;
 const updateStreak = async (req, res) => {
     try {
         const userId = req.user?.id;
-        let stats = await readingstats_model_1.default.findOne({ userId });
-        if (!stats) {
-            stats = await readingstats_model_1.default.create({ userId });
-        }
+        let stats = await readingstats_model_1.default.findOneAndUpdate({ userId }, { $setOnInsert: { userId } }, { new: true, upsert: true, setDefaultsOnInsert: true });
         const today = new Date().setHours(0, 0, 0, 0);
         const lastRead = stats.lastReadDate
             ? new Date(stats.lastReadDate).setHours(0, 0, 0, 0)
@@ -172,7 +162,7 @@ const getOrders = async (req, res) => {
                 .sort({ createdAt: -1 })
                 .skip(skip)
                 .limit(limit)
-                .select("-statusHistory"), // strip verbose history for list view
+                .select("-statusHistory"),
             order_model_1.Order.countDocuments({ customerId: userId }),
         ]);
         res.status(200).json({
@@ -196,10 +186,7 @@ exports.getOrders = getOrders;
 const getPreferences = async (req, res) => {
     try {
         const userId = req.user?.id;
-        let preferences = await userpreferences_model_1.default.findOne({ userId });
-        if (!preferences) {
-            preferences = await userpreferences_model_1.default.create({ userId });
-        }
+        let preferences = await userpreferences_model_1.default.findOneAndUpdate({ userId }, { $setOnInsert: { userId } }, { new: true, upsert: true, setDefaultsOnInsert: true });
         res.status(200).json({ preferences });
     }
     catch (error) {
@@ -213,24 +200,14 @@ const updatePreferences = async (req, res) => {
     try {
         const userId = req.user?.id;
         const { notifications, theme, language } = req.body;
-        let preferences = await userpreferences_model_1.default.findOne({ userId });
-        if (!preferences) {
-            preferences = await userpreferences_model_1.default.create({
-                userId,
-                notifications,
-                theme,
-                language,
-            });
-        }
-        else {
-            if (notifications)
-                preferences.notifications = notifications;
-            if (theme)
-                preferences.theme = theme;
-            if (language)
-                preferences.language = language;
-            await preferences.save();
-        }
+        const updatePayload = {};
+        if (notifications)
+            updatePayload.notifications = notifications;
+        if (theme)
+            updatePayload.theme = theme;
+        if (language)
+            updatePayload.language = language;
+        let preferences = await userpreferences_model_1.default.findOneAndUpdate({ userId }, { $set: updatePayload, $setOnInsert: { userId } }, { new: true, upsert: true, setDefaultsOnInsert: true });
         res.status(200).json({
             message: "Preferences updated successfully",
             preferences,

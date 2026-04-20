@@ -33,32 +33,21 @@ var __importStar = (this && this.__importStar) || (function () {
     };
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
+exports.RiderPayout = void 0;
 const mongoose_1 = __importStar(require("mongoose"));
-const supportSchema = new mongoose_1.Schema({
-    type: {
-        type: String,
-        enum: ["feedback", "book_request", "contact", "return_request", "bulk_order"],
-        required: true,
-    },
+const RiderPayoutSchema = new mongoose_1.Schema({
+    payoutId: { type: String, required: true, unique: true },
+    riderId: { type: mongoose_1.Schema.Types.ObjectId, ref: "User", required: true },
+    amount: { type: Number, required: true },
+    esewaId: { type: String },
     status: {
         type: String,
-        enum: ["pending", "in_review", "resolved", "rejected"],
-        default: "pending",
+        enum: ["pending", "processing", "paid", "rejected"],
+        default: "paid", // admin manually pays then records it
     },
-    name: String,
-    email: { type: String, required: true },
-    phone: String,
-    subject: String,
-    message: { type: String, required: true },
-    rating: { type: Number, min: 1, max: 5 },
-    files: [String],
-    orderNumber: String,
-    returnReason: String,
-    bookTitle: String,
-    bookAuthor: String,
-    organization: String,
-    organizationType: String,
-    adminNote: String,
-    resolvedAt: Date,
+    note: { type: String },
+    processedAt: { type: Date },
 }, { timestamps: true });
-exports.default = mongoose_1.default.model("Support", supportSchema);
+RiderPayoutSchema.index({ riderId: 1, createdAt: -1 });
+RiderPayoutSchema.index({ status: 1 });
+exports.RiderPayout = mongoose_1.default.model("RiderPayout", RiderPayoutSchema);

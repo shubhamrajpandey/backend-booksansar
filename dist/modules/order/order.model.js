@@ -67,6 +67,8 @@ const OrderSchema = new mongoose_1.Schema({
         province: { type: String },
         country: { type: String },
         shippingNote: { type: String },
+        latitude: { type: Number, default: null },
+        longitude: { type: Number, default: null },
     },
     shippingMethod: {
         type: String,
@@ -82,6 +84,9 @@ const OrderSchema = new mongoose_1.Schema({
             "pending_payment",
             "payment_received",
             "confirmed",
+            "assigned",
+            "picked_up",
+            "in_transit",
             "shipped",
             "delivered",
             "cancelled",
@@ -101,11 +106,23 @@ const OrderSchema = new mongoose_1.Schema({
             enum: ["holding", "released", "refunded"],
             default: "holding",
         },
-        grossAmount: { type: Number },
-        commissionRate: { type: Number },
-        commissionAmount: { type: Number },
-        vendorAmount: { type: Number },
+        grossAmount: { type: Number, default: 0 },
+        commissionRate: { type: Number, default: 0.03 },
+        commissionAmount: { type: Number, default: 0 },
+        vendorAmount: { type: Number, default: 0 },
+        deliveryCharge: { type: Number, default: 0 }, // ← new
+        riderAmount: { type: Number, default: 0 }, // ← new
+        totalAmount: { type: Number, default: 0 }, // ← new
         releasedAt: { type: Date },
+    },
+    riderId: {
+        type: mongoose_1.Schema.Types.ObjectId,
+        ref: "User",
+        default: null,
+    },
+    deliveredAt: {
+        type: Date,
+        default: null,
     },
     statusHistory: [
         {
@@ -117,4 +134,5 @@ const OrderSchema = new mongoose_1.Schema({
 }, { timestamps: true });
 OrderSchema.index({ customerId: 1, createdAt: -1 });
 OrderSchema.index({ "items.vendorId": 1, createdAt: -1 });
+OrderSchema.index({ riderId: 1, status: 1 });
 exports.Order = mongoose_1.default.model("Order", OrderSchema);

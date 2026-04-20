@@ -8,6 +8,7 @@ const conversation_model_1 = __importDefault(require("./models/conversation.mode
 const message_model_1 = __importDefault(require("./models/message.model"));
 const book_model_1 = __importDefault(require("../book/book.model"));
 const user_model_1 = __importDefault(require("../user/user.model"));
+const vendor_model_1 = __importDefault(require("../vendor/vendor.model")); // ← added
 const http_status_codes_1 = require("http-status-codes");
 const logger_1 = __importDefault(require("../../utils/logger"));
 const createOrGetConversation = async (req, res) => {
@@ -31,7 +32,21 @@ const createOrGetConversation = async (req, res) => {
                     message: "Chat is only available for second-hand and physical books",
                 });
             }
-            const sellerId = book.vendorId || book.uploader;
+            // ── FIX: vendorId is a Vendor doc ID, not a User ID ──────
+            // We need to resolve it to a User ID first
+            let sellerId = null;
+            if (book.vendorId) {
+                // Book uploaded by a vendor — find the vendor's userId
+                const vendor = await vendor_model_1.default.findById(book.vendorId).lean();
+                if (vendor?.userId) {
+                    sellerId = vendor.userId;
+                }
+            }
+            // Fallback to uploader (for second-hand books uploaded by learners)
+            if (!sellerId && book.uploader) {
+                sellerId = book.uploader;
+            }
+            // ──────────────────────────────────────────────────────────
             if (!sellerId) {
                 return res.status(http_status_codes_1.StatusCodes.BAD_REQUEST).json({
                     message: "Book has no associated seller",

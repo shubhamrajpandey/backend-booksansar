@@ -15,11 +15,10 @@ const initiateEsewaPayment = async (req, res) => {
         if (!customerId) {
             return res.status(401).json({ success: false, message: "Unauthorized" });
         }
-        const { items, contact, shippingAddress, shippingMethod, shippingCost, subtotal, totalAmount, } = req.body;
+        const { items, contact, shippingAddress, // ← now includes latitude and longitude from Leaflet
+        shippingMethod, shippingCost, } = req.body;
         if (!items?.length) {
-            return res
-                .status(400)
-                .json({ success: false, message: "No items in order" });
+            return res.status(400).json({ success: false, message: "No items in order" });
         }
         const bookIds = items.map((i) => i.bookId);
         const books = await book_model_1.default.find({ _id: { $in: bookIds } }).lean();
@@ -29,7 +28,7 @@ const initiateEsewaPayment = async (req, res) => {
             if (!book)
                 throw new Error(`Book ${item.bookId} not found`);
             if (!book.vendorId) {
-                throw new Error(`Book "${book.title}" has no vendor assigned. Cannot process order.`);
+                throw new Error(`Book "${book.title}" has no vendor assigned.`);
             }
             return {
                 bookId: book._id,
@@ -41,44 +40,53 @@ const initiateEsewaPayment = async (req, res) => {
                 vendorId: book.vendorId,
             };
         });
+        // ── Multi-vendor check ────────────────────────────────────
+        const uniqueVendorIds = [
+            ...new Set(resolvedItems.map((i) => String(i.vendorId))),
+        ];
+        if (uniqueVendorIds.length > 1) {
+            return res.status(400).json({
+                success: false,
+                message: "Please checkout books from one vendor at a time.",
+            });
+        }
         const verifiedSubtotal = resolvedItems.reduce((sum, i) => sum + i.price, 0);
-        const verifiedShipping = shippingMethod === "express" ? 150 : 0;
-        const verifiedTotal = verifiedSubtotal + verifiedShipping;
+        const verifiedShippingCost = shippingCost ?? 0;
+        const verifiedTotal = verifiedSubtotal + verifiedShippingCost;
         const transactionUuid = `BS-${Date.now()}`;
-        const escrow = (0, escrow_service_1.calculateEscrow)(verifiedTotal);
+        const escrow = (0, escrow_service_1.calculateEscrow)(verifiedSubtotal, verifiedShippingCost);
         const order = new order_model_1.Order({
             orderId: transactionUuid,
             customerId,
             contact,
             items: resolvedItems,
-            shippingAddress,
+            // ── shippingAddress now includes lat/lng from Leaflet ──
+            shippingAddress: {
+                firstName: shippingAddress.firstName,
+                lastName: shippingAddress.lastName,
+                address: shippingAddress.address,
+                city: shippingAddress.city,
+                postalCode: shippingAddress.postalCode,
+                province: shippingAddress.province,
+                country: shippingAddress.country,
+                shippingNote: shippingAddress.shippingNote,
+                latitude: shippingAddress.latitude ?? null, // ← from map
+                longitude: shippingAddress.longitude ?? null, // ← from map
+            },
             shippingMethod: shippingMethod || "standard",
-            shippingCost: verifiedShipping,
+            shippingCost: verifiedShippingCost,
             subtotal: verifiedSubtotal,
             totalAmount: verifiedTotal,
             status: "pending_payment",
-            payment: {
-                method: "esewa",
-                transactionUuid,
-            },
-            escrow: {
-                status: "holding",
-                ...escrow,
-            },
+            payment: { method: "esewa", transactionUuid },
+            escrow: { status: "holding", ...escrow },
             statusHistory: [{ status: "pending_payment", changedAt: new Date() }],
         });
         await order.save();
-        const formData = (0, esewa_service_1.buildEsewaFormData)({
-            amount: verifiedTotal,
-            transactionUuid,
-        });
+        const formData = (0, esewa_service_1.buildEsewaFormData)({ amount: verifiedTotal, transactionUuid });
         return res.status(201).json({
             success: true,
-            data: {
-                formData,
-                paymentUrl: esewa_service_1.ESEWA_PAYMENT_URL,
-                orderId: transactionUuid,
-            },
+            data: { formData, paymentUrl: esewa_service_1.ESEWA_PAYMENT_URL, orderId: transactionUuid },
         });
     }
     catch (err) {
@@ -92,22 +100,13 @@ const initiateEsewaPayment = async (req, res) => {
 exports.initiateEsewaPayment = initiateEsewaPayment;
 const verifyEsewaPaymentCallback = async (req, res) => {
     const { data } = req.query;
-    if (!data) {
-        return res
-            .status(400)
-            .json({ success: false, message: "No payment data received" });
-    }
+    if (!data)
+        return res.status(400).json({ success: false, message: "No payment data received" });
     try {
         const result = await (0, esewa_service_1.verifyEsewaPayment)(data);
-        if (!result.verified) {
-            return res
-                .status(400)
-                .json({ success: false, message: "Payment verification failed" });
-        }
-        const order = await order_model_1.Order.findOneAndUpdate({
-            orderId: result.transactionUuid,
-            status: "pending_payment",
-        }, {
+        if (!result.verified)
+            return res.status(400).json({ success: false, message: "Payment verification failed" });
+        const order = await order_model_1.Order.findOneAndUpdate({ orderId: result.transactionUuid, status: "pending_payment" }, {
             status: "payment_received",
             "payment.transactionCode": result.transactionCode,
             "payment.verifiedAt": new Date(),
@@ -119,26 +118,26 @@ const verifyEsewaPaymentCallback = async (req, res) => {
                 },
             },
         }, { new: true });
-        if (!order) {
-            return res
-                .status(200)
-                .json({ success: true, message: "Already processed" });
-        }
+        if (!order)
+            return res.status(200).json({ success: true, message: "Already processed" });
         return res.json({
             success: true,
             message: "Payment verified. Order placed successfully.",
             data: {
                 orderId: order.orderId,
                 totalAmount: order.totalAmount,
-                escrow: order.escrow,
+                escrow: {
+                    bookPrice: order.escrow.grossAmount,
+                    bookSansarCommission: order.escrow.commissionAmount,
+                    vendorReceives: order.escrow.vendorAmount,
+                    riderReceives: order.escrow.riderAmount ?? 0,
+                },
             },
         });
     }
     catch (err) {
         logger_1.default.error("eSewa verification error");
-        return res
-            .status(500)
-            .json({ success: false, message: "Verification failed" });
+        return res.status(500).json({ success: false, message: "Verification failed" });
     }
 };
 exports.verifyEsewaPaymentCallback = verifyEsewaPaymentCallback;
