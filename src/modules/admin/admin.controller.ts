@@ -1058,7 +1058,15 @@ export const getPlatformStats = async (req: Request, res: Response) => {
     const platformVersion = process.env.PLATFORM_VERSION || "1.0.0";
 
     const uptimeSeconds = process.uptime();
-    const uptimePercentage = "99.8%";
+    const days = Math.floor(uptimeSeconds / 86400);
+    const hours = Math.floor((uptimeSeconds % 86400) / 3600);
+    const minutes = Math.floor((uptimeSeconds % 3600) / 60);
+    const seconds = Math.floor(uptimeSeconds % 60);
+    
+    let formattedUptime = "";
+    if (days > 0) formattedUptime += `${days}d `;
+    if (hours > 0 || days > 0) formattedUptime += `${hours}h `;
+    formattedUptime += `${minutes}m ${seconds}s`;
 
     const lastBackup = await getLastBackupTime();
 
@@ -1069,7 +1077,7 @@ export const getPlatformStats = async (req: Request, res: Response) => {
         platformVersion,
         databaseStatus: dbStatus,
         lastBackup,
-        uptime: uptimePercentage,
+        uptime: formattedUptime.trim(),
         uptimeSeconds,
       },
     });
