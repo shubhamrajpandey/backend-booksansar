@@ -102,7 +102,7 @@ export const getMyPayouts = async (req: Request, res: Response) => {
 
 export const getAllPayouts = async (req: Request, res: Response) => {
   try {
-    const { status, page = 1, limit = 20 } = req.query;
+    const { status, page = 1, limit = 10 } = req.query;
     const skip = (Number(page) - 1) * Number(limit);
     const filter: any = {};
     if (status && status !== "all") filter.status = status;

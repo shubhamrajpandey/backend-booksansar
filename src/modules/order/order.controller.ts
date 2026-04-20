@@ -163,7 +163,7 @@ export const getAvailableRiders = async (req: Request, res: Response) => {
 
 export const getAllOrdersAdmin = async (req: Request, res: Response) => {
   try {
-    const { status, page = 1, limit = 20, search } = req.query;
+    const { status, page = 1, limit = 10, search } = req.query;
     const filter: any = {};
     if (status) filter.status = status;
     if (search) {
