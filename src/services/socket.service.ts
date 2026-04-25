@@ -4,6 +4,8 @@ import Message from "../modules/chat/models/message.model";
 import Conversation from "../modules/chat/models/conversation.model";
 import { SendMessagePayload } from "../types/chat";
 import logger from "../utils/logger";
+import { notifyChatMessage } from "../modules/notification/fcm.service";
+import User from "../modules/user/user.model";
 
 export const initSocket = (server: any) => {
   const io = new Server(server, {
@@ -70,6 +72,20 @@ export const initSocket = (server: any) => {
           receiverId: data.receiverId,
           text: data.text,
         });
+
+        // Send FCM Notification
+        try {
+          const sender = await User.findById(socket.data.userId).select("name").lean();
+          const senderName = sender?.name || "Someone";
+          await notifyChatMessage(
+            data.receiverId,
+            senderName,
+            data.text,
+            data.conversationId
+          );
+        } catch (notifErr) {
+          logger.error(`Failed to send chat message notification: ${notifErr}`);
+        }
 
         const populatedMessage = await Message.findById(message._id)
           .populate("senderId", "name email avatar")

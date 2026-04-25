@@ -9,6 +9,7 @@ import mongoose from "mongoose";
 import { getLastBackupTime } from "../../utils/platform.utils";
 import Genre from "../taxonomy/genre.model";
 import { Order } from "../order/order.model";
+import { notifyBookModerated } from "../notification/fcm.service";
 
 // Users
 export const getAllUsers = async (req: Request, res: Response) => {
@@ -823,7 +824,9 @@ export const getActiveCategories = async (req: Request, res: Response) => {
   }
 };
 
-//moderate free book and second-hand for admin approval
+// Replace ONLY the moderateFreeBook function in admin.controller.ts
+// Everything else in admin.controller.ts stays the same
+
 export const moderateFreeBook = async (req: Request, res: Response) => {
   const { id } = req.params;
   const { action } = req.body;
@@ -847,8 +850,7 @@ export const moderateFreeBook = async (req: Request, res: Response) => {
   if (!["free", "second-hand", "free-notes"].includes(book.type)) {
     return res.status(StatusCodes.BAD_REQUEST).json({
       success: false,
-      message:
-        "Only free, free-notes, and second-hand books require admin approval",
+      message: "Only free, free-notes, and second-hand books require admin approval",
     });
   }
 
@@ -862,12 +864,31 @@ export const moderateFreeBook = async (req: Request, res: Response) => {
   book.visibility = action === "approve" ? "public" : "rejected";
   await book.save();
 
+  // Send FCM Notification to the uploader
+  try {
+    // uploader could be ObjectId or populated object — handle both
+    const uploaderId = typeof (book as any).uploader === "object"
+      ? String((book as any).uploader._id || (book as any).uploader)
+      : String((book as any).uploader);
+
+    if (uploaderId && uploaderId !== "undefined" && uploaderId !== "null") {
+      await notifyBookModerated(
+        uploaderId,
+        book.title,
+        action === "approve",
+        String((book as any)._id)
+      );
+      console.log(`✅ Book moderation notification sent to uploader=${uploaderId}, action=${action}`);
+    } else {
+      console.warn(`⚠️ No uploader found for book=${book.title}`);
+    }
+  } catch (notifErr) {
+    console.error(`Failed to send book moderation notification: ${notifErr}`);
+  }
+
   return res.status(StatusCodes.OK).json({
     success: true,
-    message:
-      action === "approve"
-        ? "Book approved and is now public"
-        : "Book rejected",
+    message: action === "approve" ? "Book approved and is now public" : "Book rejected",
     data: book,
   });
 };
@@ -1062,7 +1083,7 @@ export const getPlatformStats = async (req: Request, res: Response) => {
     const hours = Math.floor((uptimeSeconds % 86400) / 3600);
     const minutes = Math.floor((uptimeSeconds % 3600) / 60);
     const seconds = Math.floor(uptimeSeconds % 60);
-    
+
     let formattedUptime = "";
     if (days > 0) formattedUptime += `${days}d `;
     if (hours > 0 || days > 0) formattedUptime += `${hours}h `;

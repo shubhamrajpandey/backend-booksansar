@@ -13,6 +13,7 @@ export interface IUser extends Document {
   accountStatus: "active" | "suspended";
   isFirstLogin: boolean;
   isVerified: boolean;
+  fcmToken?: string;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -73,6 +74,10 @@ const userSchema: Schema<IUser> = new Schema(
     isVerified: {
       type: Boolean,
       default: false,
+    },
+    fcmToken: {
+      type: String,
+      default: "",
     },
   },
   { timestamps: true },

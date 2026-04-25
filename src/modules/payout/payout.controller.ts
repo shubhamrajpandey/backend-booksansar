@@ -2,6 +2,7 @@ import { Request, Response } from "express";
 import { Payout } from "./payout.model";
 import Vendor from "../vendor/vendor.model";
 import { Order } from "../order/order.model";
+import { notifyPayoutProcessed } from "../notification/fcm.service";
 
 export const requestPayout = async (req: Request, res: Response) => {
   try {
@@ -157,6 +158,22 @@ export const updatePayoutStatus = async (req: Request, res: Response) => {
     if (adminNote) payout.adminNote = adminNote;
     if (status === "paid") payout.processedAt = new Date();
     await payout.save();
+
+    // Send FCM Notification
+    if (status === "paid") {
+      try {
+        const vendor = await Vendor.findById(payout.vendorId);
+        if (vendor && vendor.userId) {
+          await notifyPayoutProcessed(
+            vendor.userId.toString(),
+            payout.netAmount,
+            payout.payoutId
+          );
+        }
+      } catch (notifErr) {
+        console.error(`Failed to send payout notification: ${notifErr}`);
+      }
+    }
 
     return res.json({ success: true, message: `Payout marked as ${status}`, data: payout });
   } catch (err) {

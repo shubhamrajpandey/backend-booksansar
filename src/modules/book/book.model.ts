@@ -48,7 +48,7 @@ const BookSchema: Schema = new Schema<IBook>(
     category: { type: String, required: true },
     genre: { type: String },
 
-    description: { type: String },
+    description: { type: String, required: true },
     coverImage: { type: String, trim: true },
     additionalImages: [{ type: String, trim: true }],
 

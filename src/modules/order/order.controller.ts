@@ -3,6 +3,7 @@ import { Order } from "./order.model";
 import Vendor from "../vendor/vendor.model";
 import User from "../user/user.model";
 import { Payout } from "../payout/payout.model";
+import { notifyRiderAssigned, notifyOrderStatus } from "../notification/fcm.service";
 
 export const SHIPPING_RATES = {
   insideValley: 80,
@@ -136,6 +137,17 @@ export const assignRiderToOrder = async (req: Request, res: Response) => {
     });
     await order.save();
 
+    // Send FCM Notification
+    try {
+      await notifyRiderAssigned(
+        (rider as any)._id.toString(),
+        order.orderId,
+        order.shippingAddress?.address || "Delivery Address"
+      );
+    } catch (notifErr) {
+      console.error(`Failed to send rider assigned notification: ${notifErr}`);
+    }
+
     return res.status(200).json({
       success: true,
       message: `Order assigned to ${rider.name} successfully.`,
@@ -223,6 +235,17 @@ export const updateOrderStatus = async (req: Request, res: Response) => {
     if (status === "refunded") order.escrow.status = "refunded";
 
     await order.save();
+
+    // Send FCM Notification
+    try {
+      await notifyOrderStatus(
+        order.customerId.toString(),
+        order.orderId,
+        order.status
+      );
+    } catch (notifErr) {
+      console.error(`Failed to send order status notification: ${notifErr}`);
+    }
 
     return res.json({
       success: true,

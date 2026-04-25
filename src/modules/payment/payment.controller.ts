@@ -8,6 +8,8 @@ import { calculateEscrow } from "../../services/escrow.service";
 import { Order } from "../order/order.model";
 import Book from "../book/book.model";
 import logger from "../../utils/logger";
+import { notifyOrderPlaced } from "../notification/fcm.service";
+import Vendor from "../vendor/vendor.model";
 
 export const initiateEsewaPayment = async (req: Request, res: Response) => {
   try {
@@ -19,7 +21,7 @@ export const initiateEsewaPayment = async (req: Request, res: Response) => {
     const {
       items,
       contact,
-      shippingAddress,  // ← now includes latitude and longitude from Leaflet
+      shippingAddress,
       shippingMethod,
       shippingCost,
     } = req.body;
@@ -49,52 +51,70 @@ export const initiateEsewaPayment = async (req: Request, res: Response) => {
       };
     });
 
-    // ── Multi-vendor check ────────────────────────────────────
-    const uniqueVendorIds = [
-      ...new Set(resolvedItems.map((i: any) => String(i.vendorId))),
-    ];
-    if (uniqueVendorIds.length > 1) {
-      return res.status(400).json({
-        success: false,
-        message: "Please checkout books from one vendor at a time.",
-      });
+    const vendorGroups: Record<string, any[]> = {};
+    for (const item of resolvedItems) {
+      const vId = String(item.vendorId);
+      if (!vendorGroups[vId]) vendorGroups[vId] = [];
+      vendorGroups[vId].push(item);
     }
 
     const verifiedSubtotal = resolvedItems.reduce((sum: number, i: any) => sum + i.price, 0);
     const verifiedShippingCost = shippingCost ?? 0;
     const verifiedTotal = verifiedSubtotal + verifiedShippingCost;
     const transactionUuid = `BS-${Date.now()}`;
-    const escrow = calculateEscrow(verifiedSubtotal, verifiedShippingCost);
 
-    const order = new Order({
-      orderId: transactionUuid,
-      customerId,
-      contact,
-      items: resolvedItems,
-      // ── shippingAddress now includes lat/lng from Leaflet ──
-      shippingAddress: {
-        firstName: shippingAddress.firstName,
-        lastName: shippingAddress.lastName,
-        address: shippingAddress.address,
-        city: shippingAddress.city,
-        postalCode: shippingAddress.postalCode,
-        province: shippingAddress.province,
-        country: shippingAddress.country,
-        shippingNote: shippingAddress.shippingNote,
-        latitude: shippingAddress.latitude ?? null,   // ← from map
-        longitude: shippingAddress.longitude ?? null, // ← from map
-      },
-      shippingMethod: shippingMethod || "standard",
-      shippingCost: verifiedShippingCost,
-      subtotal: verifiedSubtotal,
-      totalAmount: verifiedTotal,
-      status: "pending_payment",
-      payment: { method: "esewa", transactionUuid },
-      escrow: { status: "holding", ...escrow },
-      statusHistory: [{ status: "pending_payment", changedAt: new Date() }],
-    });
+    const vendorIds = Object.keys(vendorGroups);
+    let remainingShipping = verifiedShippingCost;
 
-    await order.save();
+    const ordersToSave = [];
+    let index = 0;
+
+    for (const vId of vendorIds) {
+      const itemsForVendor = vendorGroups[vId];
+      const subtotalForVendor = itemsForVendor.reduce((sum: number, i: any) => sum + i.price, 0);
+
+      let shippingForVendor = 0;
+      if (index === vendorIds.length - 1) {
+        shippingForVendor = remainingShipping;
+      } else {
+        shippingForVendor = parseFloat((verifiedShippingCost / vendorIds.length).toFixed(2));
+        remainingShipping -= shippingForVendor;
+      }
+
+      const totalForVendor = subtotalForVendor + shippingForVendor;
+      const escrow = calculateEscrow(subtotalForVendor, shippingForVendor);
+
+      const order = new Order({
+        orderId: `${transactionUuid}-${index + 1}`,
+        customerId,
+        contact,
+        items: itemsForVendor,
+        shippingAddress: {
+          firstName: shippingAddress.firstName,
+          lastName: shippingAddress.lastName,
+          address: shippingAddress.address,
+          city: shippingAddress.city,
+          postalCode: shippingAddress.postalCode,
+          province: shippingAddress.province,
+          country: shippingAddress.country,
+          shippingNote: shippingAddress.shippingNote,
+          latitude: shippingAddress.latitude ?? null,
+          longitude: shippingAddress.longitude ?? null,
+        },
+        shippingMethod: shippingMethod || "standard",
+        shippingCost: shippingForVendor,
+        subtotal: subtotalForVendor,
+        totalAmount: totalForVendor,
+        status: "pending_payment",
+        payment: { method: "esewa", transactionUuid },
+        escrow: { status: "holding", ...escrow },
+        statusHistory: [{ status: "pending_payment", changedAt: new Date() }],
+      });
+      ordersToSave.push(order);
+      index++;
+    }
+
+    await Promise.all(ordersToSave.map(o => o.save()));
 
     const formData = buildEsewaFormData({ amount: verifiedTotal, transactionUuid });
 
@@ -119,37 +139,79 @@ export const verifyEsewaPaymentCallback = async (req: Request, res: Response) =>
     const result = await verifyEsewaPayment(data as string);
     if (!result.verified) return res.status(400).json({ success: false, message: "Payment verification failed" });
 
-    const order = await Order.findOneAndUpdate(
-      { orderId: result.transactionUuid, status: "pending_payment" },
-      {
+    const orders = await Order.find({
+      "payment.transactionUuid": result.transactionUuid,
+      status: "pending_payment",
+    });
+
+    if (!orders || orders.length === 0) {
+      return res.status(200).json({ success: true, message: "Already processed or not found" });
+    }
+
+    let totalAmount = 0;
+    const escrowSummary = {
+      bookPrice: 0,
+      bookSansarCommission: 0,
+      vendorReceives: 0,
+      riderReceives: 0,
+    };
+
+    for (const order of orders) {
+      order.status = "payment_received";
+      order.payment.transactionCode = result.transactionCode;
+      order.payment.verifiedAt = new Date();
+      order.statusHistory.push({
         status: "payment_received",
-        "payment.transactionCode": result.transactionCode,
-        "payment.verifiedAt": new Date(),
-        $push: {
-          statusHistory: {
-            status: "payment_received",
-            changedAt: new Date(),
-            note: `eSewa transaction ${result.transactionCode}`,
-          },
-        },
-      },
-      { new: true },
-    );
+        changedAt: new Date(),
+        note: `eSewa transaction ${result.transactionCode}`,
+      });
+      await order.save();
 
-    if (!order) return res.status(200).json({ success: true, message: "Already processed" });
+      totalAmount += order.totalAmount;
+      escrowSummary.bookPrice += order.escrow.grossAmount;
+      escrowSummary.bookSansarCommission += order.escrow.commissionAmount;
+      escrowSummary.vendorReceives += order.escrow.vendorAmount;
+      escrowSummary.riderReceives += order.escrow.riderAmount;
 
+      // ── Send notifications ──────────────────────────────────
+      try {
+        const customerId = order.customerId.toString();
+        const vendorDocId = order.items[0]?.vendorId?.toString();
+        const bookTitle = order.items[0]?.title || "Book";
+
+        logger.info(`Notification attempt: customerId=${customerId}, vendorDocId=${vendorDocId}`);
+
+        if (customerId && vendorDocId) {
+          const vendor = await Vendor.findById(vendorDocId).select("userId").lean();
+          logger.info(`Vendor lookup result: ${JSON.stringify(vendor)}`);
+
+          if (vendor?.userId) {
+            await notifyOrderPlaced(
+              customerId,
+              vendor.userId.toString(),
+              order.orderId,
+              bookTitle
+            );
+            logger.info(`✅ Order notification sent: customer=${customerId}, vendor=${vendor.userId}`);
+          } else {
+            logger.warn(`⚠️ Vendor not found for vendorDocId=${vendorDocId}`);
+          }
+        }
+      } catch (notifErr) {
+        // ← NEVER crash the main flow
+        logger.error(`Failed to send order placed notification: ${notifErr}`);
+      }
+      // ────────────────────────────────────────────────────────
+    }
+
+    // ← return is OUTSIDE the for loop — this was the bug in your version!
     return res.json({
       success: true,
       message: "Payment verified. Order placed successfully.",
       data: {
-        orderId: order.orderId,
-        totalAmount: order.totalAmount,
-        escrow: {
-          bookPrice: order.escrow.grossAmount,
-          bookSansarCommission: order.escrow.commissionAmount,
-          vendorReceives: order.escrow.vendorAmount,
-          riderReceives: (order.escrow as any).riderAmount ?? 0,
-        },
+        orderId: result.transactionUuid,
+        totalAmount,
+        escrow: escrowSummary,
       },
     });
   } catch (err: any) {

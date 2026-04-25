@@ -1,128 +1,126 @@
-// PATH: backend-booksansar/src/modules/notification/notification.controller.ts
-
 import { Request, Response } from "express";
 import { StatusCodes } from "http-status-codes";
 import Notification from "./notification.model";
-import logger from "../../utils/logger";
+import User from "../user/user.model";
 
-// GET /api/v1/notifications
-// Returns the latest 50 notifications for the logged-in user
-export const getNotifications = async (req: Request, res: Response) => {
+// GET /api/v1/notifications — get all notifications for current user
+export const getMyNotifications = async (req: Request, res: Response) => {
   try {
-    const userId = req.user!.id;
+    const userId = req.user?.id;
+    const { page = 1, limit = 20 } = req.query;
+    const skip = (Number(page) - 1) * Number(limit);
 
-    const notifications = await Notification.find({ recipient: userId })
-      .sort({ createdAt: -1 })
-      .limit(50)
-      .lean();
-
-    const unreadCount = notifications.filter((n) => !n.isRead).length;
+    const [notifications, total, unreadCount] = await Promise.all([
+      Notification.find({ userId })
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(Number(limit))
+        .lean(),
+      Notification.countDocuments({ userId }),
+      Notification.countDocuments({ userId, isRead: false }),
+    ]);
 
     return res.status(StatusCodes.OK).json({
       success: true,
+      data: notifications,
       unreadCount,
-      notifications,
+      pagination: {
+        total,
+        page: Number(page),
+        limit: Number(limit),
+        pages: Math.ceil(total / Number(limit)),
+      },
     });
-  } catch (err) {
-    logger.error("getNotifications error:");
-    return res
-      .status(StatusCodes.INTERNAL_SERVER_ERROR)
-      .json({ success: false, message: "Failed to fetch notifications" });
+  } catch (err: any) {
+    return res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({
+      success: false,
+      message: err.message,
+    });
   }
 };
 
-// PATCH /api/v1/notifications/:id/read
-// Marks a single notification as read
+// PATCH /api/v1/notifications/:id/read — mark one as read
 export const markOneRead = async (req: Request, res: Response) => {
   try {
-    const userId = req.user!.id;
-
-    const notification = await Notification.findOneAndUpdate(
-      { _id: req.params.id, recipient: userId },
+    const userId = req.user?.id;
+    await Notification.findOneAndUpdate(
+      { _id: req.params.id, userId },
       { isRead: true },
-      { new: true },
     );
-
-    if (!notification) {
-      return res
-        .status(StatusCodes.NOT_FOUND)
-        .json({ success: false, message: "Notification not found" });
-    }
-
-    return res.status(StatusCodes.OK).json({ success: true, notification });
-  } catch (err) {
-    logger.error("markOneRead error:");
-    return res
-      .status(StatusCodes.INTERNAL_SERVER_ERROR)
-      .json({ success: false, message: "Failed to mark notification as read" });
+    return res.status(StatusCodes.OK).json({ success: true });
+  } catch (err: any) {
+    return res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({
+      success: false,
+      message: err.message,
+    });
   }
 };
 
-// PATCH /api/v1/notifications/read-all
-// Marks ALL unread notifications for the user as read
+// PATCH /api/v1/notifications/read-all — mark all as read
 export const markAllRead = async (req: Request, res: Response) => {
   try {
-    const userId = req.user!.id;
-
-    await Notification.updateMany(
-      { recipient: userId, isRead: false },
-      { isRead: true },
-    );
-
-    return res
-      .status(StatusCodes.OK)
-      .json({ success: true, message: "All notifications marked as read" });
-  } catch (err) {
-    logger.error("markAllRead error:");
-    return res
-      .status(StatusCodes.INTERNAL_SERVER_ERROR)
-      .json({ success: false, message: "Failed to mark all as read" });
+    const userId = req.user?.id;
+    await Notification.updateMany({ userId, isRead: false }, { isRead: true });
+    return res.status(StatusCodes.OK).json({ success: true });
+  } catch (err: any) {
+    return res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({
+      success: false,
+      message: err.message,
+    });
   }
 };
 
-// DELETE /api/v1/notifications/:id
-// Deletes a single notification (user can clear individual ones)
-export const deleteNotification = async (req: Request, res: Response) => {
+// DELETE /api/v1/notifications/:id — delete one
+export const deleteOne = async (req: Request, res: Response) => {
   try {
-    const userId = req.user!.id;
-
-    const notification = await Notification.findOneAndDelete({
-      _id: req.params.id,
-      recipient: userId,
+    const userId = req.user?.id;
+    await Notification.findOneAndDelete({ _id: req.params.id, userId });
+    return res.status(StatusCodes.OK).json({ success: true });
+  } catch (err: any) {
+    return res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({
+      success: false,
+      message: err.message,
     });
+  }
+};
 
-    if (!notification) {
-      return res
-        .status(StatusCodes.NOT_FOUND)
-        .json({ success: false, message: "Notification not found" });
+// DELETE /api/v1/notifications — clear all
+export const clearAll = async (req: Request, res: Response) => {
+  try {
+    const userId = req.user?.id;
+    await Notification.deleteMany({ userId });
+    return res.status(StatusCodes.OK).json({ success: true });
+  } catch (err: any) {
+    return res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({
+      success: false,
+      message: err.message,
+    });
+  }
+};
+
+// POST /api/v1/notifications/fcm-token — save FCM token for push notifications
+export const saveFcmToken = async (req: Request, res: Response) => {
+  try {
+    const userId = req.user?.id;
+    const { fcmToken } = req.body;
+
+    if (!fcmToken) {
+      return res.status(StatusCodes.BAD_REQUEST).json({
+        success: false,
+        message: "fcmToken is required",
+      });
     }
 
-    return res
-      .status(StatusCodes.OK)
-      .json({ success: true, message: "Notification deleted" });
-  } catch (err) {
-    logger.error("deleteNotification error:");
-    return res
-      .status(StatusCodes.INTERNAL_SERVER_ERROR)
-      .json({ success: false, message: "Failed to delete notification" });
-  }
-};
+    await User.findByIdAndUpdate(userId, { fcmToken });
 
-// DELETE /api/v1/notifications
-// Clears ALL notifications for the user
-export const clearAllNotifications = async (req: Request, res: Response) => {
-  try {
-    const userId = req.user!.id;
-
-    await Notification.deleteMany({ recipient: userId });
-
-    return res
-      .status(StatusCodes.OK)
-      .json({ success: true, message: "All notifications cleared" });
-  } catch (err) {
-    logger.error("clearAllNotifications error:");
-    return res
-      .status(StatusCodes.INTERNAL_SERVER_ERROR)
-      .json({ success: false, message: "Failed to clear notifications" });
+    return res.status(StatusCodes.OK).json({
+      success: true,
+      message: "FCM token saved",
+    });
+  } catch (err: any) {
+    return res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({
+      success: false,
+      message: err.message,
+    });
   }
 };

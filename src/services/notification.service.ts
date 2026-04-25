@@ -11,9 +11,8 @@
 //     metadata: { orderId: order._id },
 //   });
 
-import Notification, {
-  NotificationType,
-} from "../modules/notification/notification.model";
+import Notification from "../modules/notification/notification.model";
+export type NotificationType = "order_placed" | "order_confirmed" | "order_shipped" | "order_delivered" | "order_cancelled" | "new_order" | "book_approved" | "book_rejected" | "book_pending" | "chat_message" | "swap_requested" | "swap_accepted" | "swap_rejected";
 import logger from "../utils/logger";
 
 // Import the getter lazily to avoid circular-import issues at module load time.
@@ -22,6 +21,10 @@ let _getIO: (() => import("socket.io").Server) | null = null;
 
 export function registerIOGetter(fn: () => import("socket.io").Server) {
   _getIO = fn;
+}
+
+export function getIO() {
+  return _getIO ? _getIO() : null;
 }
 
 // ─── Core helper ─────────────────────────────────────────────────────────────
@@ -39,7 +42,14 @@ export async function createNotification(
   params: CreateNotificationParams,
 ): Promise<void> {
   try {
-    const notification = await Notification.create(params);
+    const notification = await Notification.create({
+      userId: params.recipient,
+      type: params.type,
+      title: params.title,
+      body: params.message,
+      data: { ...params.metadata, link: params.link },
+      isRead: false,
+    });
 
     // ── Real-time push via Socket.io ──────────────────────────────────────
     // Each authenticated user joins a private room named after their userId.
@@ -51,11 +61,11 @@ export async function createNotification(
           _id: notification._id,
           type: notification.type,
           title: notification.title,
-          message: notification.message,
-          link: notification.link,
+          message: notification.body,
+          link: notification.data?.link,
           isRead: false,
-          createdAt: notification.createdAt,
-          metadata: notification.metadata,
+          createdAt: (notification as any).createdAt,
+          metadata: notification.data,
         });
       } catch (socketErr) {
         // Socket errors must never crash the main request

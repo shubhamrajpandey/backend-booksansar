@@ -2,6 +2,7 @@ import { Request, Response } from "express";
 import { StatusCodes } from "http-status-codes";
 import Book from "../book/book.model";
 import Vendor from "../vendor/vendor.model";
+import { notifyLowStock } from "../notification/fcm.service";
 
 // GET /vendor/inventory
 export const getVendorInventory = async (req: Request, res: Response) => {
@@ -128,6 +129,20 @@ export const updateVendorBook = async (req: Request, res: Response) => {
       new: true,
       runValidators: true,
     });
+
+    // Send FCM Notification
+    if (updated && typeof updated.stock === "number" && updated.stock <= 10 && userId) {
+      try {
+        await notifyLowStock(
+          userId,
+          updated.title,
+          updated.stock,
+          (updated as any)._id.toString()
+        );
+      } catch (notifErr) {
+        console.error(`Failed to send low stock notification: ${notifErr}`);
+      }
+    }
 
     return res.status(StatusCodes.OK).json({
       success: true,

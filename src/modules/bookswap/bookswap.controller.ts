@@ -1,5 +1,7 @@
 import { Request, Response } from "express";
 import BookSwap from "./bookswap.model";
+import { notifySwapRequested, notifySwapResponded } from "../notification/fcm.service";
+import User from "../user/user.model";
 
 export const createSwap = async (req: Request, res: Response) => {
   try {
@@ -306,6 +308,20 @@ export const proposeSwap = async (req: Request, res: Response) => {
 
     await swap.save();
 
+    try {
+      const proposer = await User.findById(proposerId).select("name").lean();
+      if (proposer) {
+        await notifySwapRequested(
+          swap.ownerId.toString(),
+          proposer.name,
+          swap.bookTitle,
+          swap.id
+        );
+      }
+    } catch (notifErr) {
+      console.error("Failed to send swap request notification:", notifErr);
+    }
+
     return res.status(201).json({
       success: true,
       message: "Swap proposal submitted! The owner will review it.",
@@ -380,6 +396,21 @@ export const respondToProposal = async (req: Request, res: Response) => {
     }
 
     await swap.save();
+
+    try {
+      const owner = await User.findById(swap.ownerId).select("name").lean();
+      if (owner) {
+        await notifySwapResponded(
+          proposal.proposerId.toString(),
+          owner.name,
+          swap.bookTitle,
+          action as "accept" | "reject",
+          (swap._id as any).toString()
+        );
+      }
+    } catch (notifErr) {
+      console.error("Failed to send swap response notification:", notifErr);
+    }
 
     return res.json({
       success: true,

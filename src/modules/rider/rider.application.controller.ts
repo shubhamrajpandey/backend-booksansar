@@ -9,6 +9,7 @@ import {
   sendRiderApprovalEmail,
   sendRiderRejectionEmail,
 } from "../../services/mail.service";
+import { notifyRiderApplication } from "../notification/fcm.service";
 
 // ─────────────────────────────────────────────────────────────
 // Helper: generate a readable random password
@@ -102,6 +103,20 @@ export const applyAsRider = async (req: Request, res: Response) => {
       licenseUrl,
       status: "pending",
     });
+
+    // Notify all admins
+    try {
+      const admins = await User.find({ role: "admin", accountStatus: "active" }).select("_id").lean();
+      for (const adminUser of admins) {
+        try {
+          await notifyRiderApplication((adminUser as any)._id.toString(), fullName, (application as any)._id.toString());
+        } catch (notifErr) {
+          console.error(`Failed to send rider application notification to admin ${adminUser._id}: ${notifErr}`);
+        }
+      }
+    } catch (adminErr) {
+      console.error(`Failed to fetch admins for notification: ${adminErr}`);
+    }
 
     return res.status(StatusCodes.CREATED).json({
       success: true,

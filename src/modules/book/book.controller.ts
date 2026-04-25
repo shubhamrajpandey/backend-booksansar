@@ -2,10 +2,41 @@ import { StatusCodes } from "http-status-codes";
 import { Request, Response } from "express";
 import Book from "../book/book.model";
 import Vendor from "../vendor/vendor.model";
+import User from "../user/user.model";
+import { sendNotification } from "../notification/fcm.service";
 import logger from "../../utils/logger";
+
+// ── Notify all admins when a book needs review ────────────────
+async function notifyAdminsBookPending(
+  bookId: string,
+  bookTitle: string,
+  uploaderName: string,
+) {
+  const admins = await User.find({ role: "admin", accountStatus: "active" })
+    .select("_id")
+    .lean();
+
+  logger.info(`📚 Found ${admins.length} admins to notify for book: "${bookTitle}"`);
+
+  for (const admin of admins) {
+    const adminId = String((admin as any)._id);
+    logger.info(`📨 Sending book_pending notification to admin=${adminId}`);
+    await sendNotification({
+      userId: adminId,
+      title: "New Book Pending Approval 📋",
+      body: `"${bookTitle}" by ${uploaderName} needs review.`,
+      type: "book_pending",
+      data: { bookId, link: "/admin/books" },
+    });
+  }
+
+  logger.info(`✅ Book pending notifications done for "${bookTitle}"`);
+}
 
 export const uploadBookDetails = async (req: Request, res: Response) => {
   try {
+    logger.info(`📥 uploadBookDetails called by user=${req.user?.id}, role=${req.user?.role}`);
+
     if (!req.user) {
       return res.status(StatusCodes.UNAUTHORIZED).json({
         success: false,
@@ -14,30 +45,13 @@ export const uploadBookDetails = async (req: Request, res: Response) => {
     }
 
     const {
-      type,
-      title,
-      author,
-      category,
-      genre,
-      description,
-      coverImage,
-      additionalImages,
-      pdfUrl,
-      price,
-      mrp,
-      stock,
-      condition,
-      deliveryInfo,
-      rating,
-      language,
-      edition,
-      negotiable,
-      sellerName,
-      phone,
-      location,
-      printedPrice,
-      bookType,
+      type, title, author, category, genre, description,
+      coverImage, additionalImages, pdfUrl, price, mrp, stock,
+      condition, deliveryInfo, rating, language, edition,
+      negotiable, sellerName, phone, location, printedPrice, bookType,
     } = req.body;
+
+    logger.info(`📦 Book upload: type=${type}, title=${title}, author=${author}`);
 
     const uploader = req.user.id;
     const role = req.user.role;
@@ -70,7 +84,6 @@ export const uploadBookDetails = async (req: Request, res: Response) => {
       });
     }
 
-    // Both free and free-notes require a PDF
     if (type === "free" || type === "free-notes") {
       if (!pdfUrl) {
         return res.status(StatusCodes.BAD_REQUEST).json({
@@ -84,8 +97,7 @@ export const uploadBookDetails = async (req: Request, res: Response) => {
       if (price === undefined || stock === undefined || !deliveryInfo) {
         return res.status(StatusCodes.BAD_REQUEST).json({
           success: false,
-          message:
-            "Physical books require price, stock, and delivery information",
+          message: "Physical books require price, stock, and delivery information",
         });
       }
       if (price < 0 || stock < 0) {
@@ -117,68 +129,71 @@ export const uploadBookDetails = async (req: Request, res: Response) => {
       if (!vendor) {
         return res.status(StatusCodes.FORBIDDEN).json({
           success: false,
-          message:
-            "Vendor profile not found. Please complete vendor registration.",
+          message: "Vendor profile not found. Please complete vendor registration.",
         });
       }
       vendorId = vendor._id;
     }
 
-    // Visibility logic:
-    // - admin → always public
-    // - physical → public (vendor-approved flow)
-    // - free, free-notes, second-hand → pending (needs admin approval)
     let visibility: "public" | "pending" | "rejected";
     if (role === "admin") {
       visibility = "public";
     } else if (type === "physical") {
       visibility = "public";
     } else {
-      visibility = "pending"; // free, free-notes, second-hand all need approval
+      visibility = "pending";
     }
 
-    const book = await Book.create({
-      type,
-      title: title.trim(),
-      author: author.trim(),
-      category,
-      genre,
-      description,
-      coverImage,
-      additionalImages,
-      pdfUrl,
-      price,
-      mrp,
-      stock,
-      condition,
-      deliveryInfo,
-      rating,
-      language,
-      edition,
-      negotiable,
-      sellerName,
-      phone,
-      location,
-      printedPrice,
-      bookType,
-      uploader,
-      vendorId,
-      visibility,
-    });
+    logger.info(`👁️ visibility=${visibility} for type=${type}, role=${role}`);
+
+    let book: any;
+    try {
+      book = await Book.create({
+        type, title: title.trim(), author: author.trim(), category, genre,
+        description, coverImage, additionalImages, pdfUrl, price, mrp, stock,
+        condition, deliveryInfo, rating, language, edition, negotiable,
+        sellerName, phone, location, printedPrice, bookType,
+        uploader, vendorId, visibility,
+      });
+      logger.info(`📖 Book created: "${book.title}", id=${book._id}, visibility=${visibility}`);
+    } catch (bookErr: any) {
+      logger.error(`❌ Book.create failed: ${bookErr.message}`);
+      logger.error(`❌ Book.create error details: ${JSON.stringify(bookErr)}`);
+      return res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({
+        success: false,
+        message: `Failed to create book: ${bookErr.message}`,
+      });
+    }
+
+    // ── Notify admins when book needs approval ────────────────
+    if (visibility === "pending") {
+      try {
+        const uploaderDoc = await User.findById(uploader).select("name").lean();
+        const uploaderName = (uploaderDoc as any)?.name || "A user";
+        logger.info(`📚 Book pending — notifying admins for: "${book.title}" by ${uploaderName}`);
+        await notifyAdminsBookPending(
+          String(book._id),
+          book.title,
+          uploaderName,
+        );
+      } catch (notifErr: any) {
+        logger.error(`❌ notifyAdminsBookPending error: ${notifErr.message}`);
+      }
+    }
 
     return res.status(StatusCodes.CREATED).json({
       success: true,
-      message:
-        visibility === "pending"
-          ? "Book uploaded and sent for admin approval"
-          : "Book uploaded successfully",
+      message: visibility === "pending"
+        ? "Book uploaded and sent for admin approval"
+        : "Book uploaded successfully",
       book,
     });
   } catch (error: any) {
-    console.error("UPLOAD BOOK ERROR:", error);
+    logger.error(`❌ uploadBookDetails FATAL: ${error.message}`);
+    logger.error(`❌ Stack: ${error.stack}`);
     return res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({
       success: false,
-      message: "Failed to upload book",
+      message: error.message || "Failed to upload book",
     });
   }
 };
@@ -186,19 +201,9 @@ export const uploadBookDetails = async (req: Request, res: Response) => {
 export const getAllBooks = async (req: Request, res: Response) => {
   try {
     const {
-      search,
-      type,
-      category,
-      genre,
-      location,
-      author,
-      minPrice,
-      maxPrice,
-      availability,
-      visibility,
-      sortBy,
-      page = 1,
-      limit = 10,
+      search, type, category, genre, location, author,
+      minPrice, maxPrice, availability, visibility, sortBy,
+      page = 1, limit = 10,
     } = req.query;
 
     const filter: any = {};
@@ -245,37 +250,20 @@ export const getAllBooks = async (req: Request, res: Response) => {
     }
 
     let sort: Record<string, 1 | -1> = { createdAt: -1 };
-
     if (sortBy && typeof sortBy === "string") {
       switch (sortBy) {
-        case "price-low-high":
-          sort = { price: 1 };
-          break;
-        case "price-high-low":
-          sort = { price: -1 };
-          break;
-        case "rating-high-low":
-          sort = { rating: -1 };
-          break;
-        case "newest":
-          sort = { createdAt: -1 };
-          break;
-        case "title-a-z":
-          sort = { title: 1 };
-          break;
-        case "title-z-a":
-          sort = { title: -1 };
-          break;
-        case "relevance":
-        default:
-          sort = { createdAt: -1 };
-          break;
+        case "price-low-high": sort = { price: 1 }; break;
+        case "price-high-low": sort = { price: -1 }; break;
+        case "rating-high-low": sort = { rating: -1 }; break;
+        case "newest": sort = { createdAt: -1 }; break;
+        case "title-a-z": sort = { title: 1 }; break;
+        case "title-z-a": sort = { title: -1 }; break;
+        default: sort = { createdAt: -1 }; break;
       }
     }
 
     const safePage = Number(page) > 0 ? Number(page) : 1;
-    const safeLimit =
-      Number(limit) > 0 && Number(limit) <= 100 ? Number(limit) : 10;
+    const safeLimit = Number(limit) > 0 && Number(limit) <= 100 ? Number(limit) : 10;
     const skip = (safePage - 1) * safeLimit;
 
     const books = await Book.find(filter)
@@ -308,10 +296,7 @@ export const getSingleBook = async (req: Request, res: Response) => {
     const filter: any = { _id: req.params.id };
     if (req.user?.role !== "admin") filter.visibility = "public";
 
-    const book = await Book.findOne(filter).populate(
-      "uploader",
-      "name email role",
-    );
+    const book = await Book.findOne(filter).populate("uploader", "name email role");
 
     if (!book) {
       return res.status(StatusCodes.NOT_FOUND).json({
@@ -336,17 +321,8 @@ export const getSingleBook = async (req: Request, res: Response) => {
 export const updateBookDetails = async (req: Request, res: Response) => {
   try {
     const allowedFields = [
-      "title",
-      "author",
-      "category",
-      "description",
-      "price",
-      "stock",
-      "condition",
-      "location",
-      "language",
-      "edition",
-      "negotiable",
+      "title", "author", "category", "description", "price",
+      "stock", "condition", "location", "language", "edition", "negotiable",
     ];
 
     const updates: any = {};
@@ -355,27 +331,16 @@ export const updateBookDetails = async (req: Request, res: Response) => {
     }
 
     const book = await Book.findById(req.params.id);
-
     if (!book) {
-      return res.status(StatusCodes.NOT_FOUND).json({
-        success: false,
-        message: "Book not found",
-      });
+      return res.status(StatusCodes.NOT_FOUND).json({ success: false, message: "Book not found" });
     }
 
-    if (
-      req.user?.role !== "admin" &&
-      book.uploader.toString() !== req.user?.id
-    ) {
-      return res.status(StatusCodes.FORBIDDEN).json({
-        success: false,
-        message: "Not allowed",
-      });
+    if (req.user?.role !== "admin" && book.uploader.toString() !== req.user?.id) {
+      return res.status(StatusCodes.FORBIDDEN).json({ success: false, message: "Not allowed" });
     }
 
     const updatedBook = await Book.findByIdAndUpdate(req.params.id, updates, {
-      new: true,
-      runValidators: true,
+      new: true, runValidators: true,
     });
 
     return res.status(StatusCodes.OK).json({
@@ -394,30 +359,17 @@ export const updateBookDetails = async (req: Request, res: Response) => {
 export const deleteBookDetails = async (req: Request, res: Response) => {
   try {
     const book = await Book.findById(req.params.id);
-
     if (!book) {
-      return res.status(StatusCodes.NOT_FOUND).json({
-        success: false,
-        message: "Book not found",
-      });
+      return res.status(StatusCodes.NOT_FOUND).json({ success: false, message: "Book not found" });
     }
 
-    if (
-      req.user?.role !== "admin" &&
-      book.uploader.toString() !== req.user?.id
-    ) {
-      return res.status(StatusCodes.FORBIDDEN).json({
-        success: false,
-        message: "Not allowed",
-      });
+    if (req.user?.role !== "admin" && book.uploader.toString() !== req.user?.id) {
+      return res.status(StatusCodes.FORBIDDEN).json({ success: false, message: "Not allowed" });
     }
 
     await book.deleteOne();
 
-    return res.status(StatusCodes.OK).json({
-      success: true,
-      message: "Book deleted successfully",
-    });
+    return res.status(StatusCodes.OK).json({ success: true, message: "Book deleted successfully" });
   } catch (error) {
     return res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({
       success: false,
@@ -436,23 +388,14 @@ export const getMyBooks = async (req: Request, res: Response) => {
     }
 
     const { type, page = 1, limit = 20 } = req.query;
-
     const filter: any = { uploader: req.user.id };
-
-    if (type && typeof type === "string") {
-      filter.type = type;
-    }
+    if (type && typeof type === "string") filter.type = type;
 
     const safePage = Number(page) > 0 ? Number(page) : 1;
-    const safeLimit =
-      Number(limit) > 0 && Number(limit) <= 100 ? Number(limit) : 20;
+    const safeLimit = Number(limit) > 0 && Number(limit) <= 100 ? Number(limit) : 20;
     const skip = (safePage - 1) * safeLimit;
 
-    const books = await Book.find(filter)
-      .sort({ createdAt: -1 })
-      .skip(skip)
-      .limit(safeLimit);
-
+    const books = await Book.find(filter).sort({ createdAt: -1 }).skip(skip).limit(safeLimit);
     const total = await Book.countDocuments(filter);
 
     return res.status(StatusCodes.OK).json({
